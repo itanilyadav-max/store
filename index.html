@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#ffffff">
+    <title>Oligo Store | Inventory</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+
+    <style>
+        /* Mobile & App Reset */
+        html, body { height: 100%; width: 100%; overflow: hidden; overscroll-behavior: none; }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
+        
+        /* Animations */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        .hidden-panel { display: none !important; }
+        .active-nav-item { color: #0f172a !important; font-weight: 700; }
+        
+        /* Custom Scrollbar */
+        .custom-scroll::-webkit-scrollbar { height: 4px; width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+
+        /* Safe Area Padding for modern phones */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .pt-safe { padding-top: env(safe-area-inset-top); }
+
+        /* Prevent iOS Zoom on Inputs */
+        input, select, textarea { font-size: 16px !important; }
+
+        /* Analytics Tabs */
+        .ana-tab { transition: all 0.2s; white-space: nowrap; }
+        .ana-tab.active { background-color: #0f172a; color: white; border-color: #0f172a; }
+
+        /* Mobile Table Fix */
+        td { white-space: nowrap; }
+
+        /* Print Styles */
+        @media print {
+            @page { margin: 5mm; size: auto; }
+            body, html { height: auto !important; overflow: visible !important; background: white; }
+            #sidebar, header, nav, #authView, #toast, .no-print, button, .hidden-panel, #itemModal { display: none !important; }
+            #mainView, main { height: auto !important; overflow: visible !important; padding: 0 !important; display: block !important; }
+            .card-shadow, .shadow-sm { box-shadow: none !important; border: 1px solid #ddd !important; }
+            #printHeader { display: block !important; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            .print-break { page-break-inside: avoid; }
+            .overflow-x-auto { overflow: visible !important; }
+            table { width: 100% !important; border-collapse: collapse; }
+            th, td { border: 1px solid #ccc !important; padding: 4px 8px !important; color: black !important; font-size: 9pt; }
+            .grid { display: block !important; }
+            .grid > div { display: inline-block !important; width: 48% !important; margin-bottom: 10px !important; }
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <!-- PRINT HEADER -->
+    <div id="printHeader" class="hidden p-4">
+        <h1 class="text-2xl font-bold">Oligo Store Report</h1>
+        <p class="text-sm text-gray-500" id="printDate"></p>
+    </div>
+
+    <!-- AUTH SCREEN -->
+    <section id="authView" class="fixed inset-0 z-50 bg-slate-900 flex items-center justify-center p-6 no-print">
+        <div class="bg-white w-full max-w-sm p-8 rounded-3xl shadow-2xl">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-2xl mb-4 shadow-sm">
+                    <i class="fas fa-warehouse text-3xl text-slate-800"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900">Oligo Store</h1>
+                <p class="text-slate-500 text-sm">Inventory System</p>
+            </div>
+            <form id="loginForm" class="space-y-4">
+                <div><label class="text-xs font-bold text-slate-500 uppercase ml-1">Store Email</label><input type="email" id="loginEmail" class="w-full p-4 border rounded-xl focus:ring-2 focus:ring-slate-800 outline-none bg-slate-50" placeholder="store@oligo.com" required></div>
+                <div><label class="text-xs font-bold text-slate-500 uppercase ml-1">Password</label><input type="password" id="loginPass" class="w-full p-4 border rounded-xl focus:ring-2 focus:ring-slate-800 outline-none bg-slate-50" placeholder="••••••" required></div>
+                <button type="submit" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition shadow-lg">Login</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- MAIN APP LAYOUT -->
+    <div id="mainView" class="hidden flex h-full w-full overflow-hidden">
+        
+        <!-- SIDEBAR (Laptop/Desktop Only) -->
+        <aside id="sidebar" class="hidden lg:flex flex-col w-64 bg-white border-r border-slate-200 p-4 gap-2 shrink-0 z-20 no-print">
+            <div class="flex items-center gap-3 px-4 py-4 mb-2">
+                <div class="w-8 h-8 bg-slate-800 text-white rounded-lg flex items-center justify-center"><i class="fas fa-boxes"></i></div>
+                <h1 class="font-bold text-lg text-slate-900">Store Dept.</h1>
+            </div>
+            <button onclick="switchTab('dashboard')" id="nav-d-dashboard" class="nav-item active-nav-item bg-slate-50 text-slate-800 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-chart-pie w-5"></i> Dashboard</button>
+            <button onclick="switchTab('analytics')" id="nav-d-analytics" class="nav-item text-slate-500 hover:bg-slate-50 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-chart-bar w-5 text-purple-600"></i> Analytics</button>
+            <button onclick="switchTab('inventory')" id="nav-d-inventory" class="nav-item text-slate-500 hover:bg-slate-50 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-list w-5"></i> Master List</button>
+            <button onclick="switchTab('inward')" id="nav-d-inward" class="nav-item text-slate-500 hover:bg-slate-50 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-arrow-down w-5 text-green-600"></i> Stock In</button>
+            <button onclick="switchTab('outward')" id="nav-d-outward" class="nav-item text-slate-500 hover:bg-slate-50 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-arrow-up w-5 text-red-600"></i> Stock Out</button>
+            <button onclick="switchTab('logs')" id="nav-d-logs" class="nav-item text-slate-500 hover:bg-slate-50 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-history w-5"></i> Logs</button>
+            <div class="mt-auto">
+                <button onclick="logout()" class="w-full border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-500 py-2 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2"><i class="fas fa-power-off"></i> Logout</button>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <div class="flex-1 flex flex-col h-full w-full relative bg-slate-50">
+            
+            <!-- HEADER (Mobile Only Title / Laptop Actions) -->
+            <header class="bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center z-30 shrink-0 h-16 pt-safe lg:pt-3">
+                <div class="flex items-center gap-3 lg:hidden">
+                    <div class="w-8 h-8 bg-slate-800 text-white rounded-lg flex items-center justify-center shadow-md"><i class="fas fa-boxes text-sm"></i></div>
+                    <div class="leading-tight">
+                        <h1 class="font-bold text-lg text-slate-900">Oligo Store</h1>
+                    </div>
+                </div>
+                <div class="hidden lg:block font-bold text-lg text-slate-800" id="pageTitleDesktop">Dashboard</div>
+                
+                <div class="flex items-center gap-3">
+                    <div id="syncIndicator" class="hidden flex items-center gap-1 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                        <span class="text-[10px] text-green-700 font-bold uppercase">Sync On</span>
+                    </div>
+                    <button onclick="logout()" class="lg:hidden w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center"><i class="fas fa-power-off text-xs"></i></button>
+                </div>
+            </header>
+
+            <!-- SCROLLABLE CONTENT -->
+            <main class="flex-1 overflow-y-auto p-4 pb-24 lg:pb-8 w-full custom-scroll" id="scrollContainer">
+                
+                <!-- TAB 1: DASHBOARD -->
+                <div id="tab-dashboard" class="active-panel fade-in space-y-4 max-w-7xl mx-auto">
+                    <!-- KPI Cards -->
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 print-break">
+                        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase">Total Items</p>
+                            <h3 class="text-2xl font-bold text-slate-800 mt-1" id="kpiTotalItems">0</h3>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase">Valuation</p>
+                            <h3 class="text-2xl font-bold text-emerald-600 mt-1" id="kpiValuation">₹0</h3>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-red-100 shadow-sm bg-red-50/10">
+                            <p class="text-[10px] font-bold text-red-400 uppercase">Low Stock</p>
+                            <h3 class="text-2xl font-bold text-red-600 mt-1" id="kpiLowStock">0</h3>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-blue-100 shadow-sm bg-blue-50/10">
+                            <p class="text-[10px] font-bold text-blue-400 uppercase">Sync Links</p>
+                            <h3 class="text-2xl font-bold text-blue-600 mt-1" id="kpiAutoSync">0</h3>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons (Mobile Stack) -->
+                    <div class="flex flex-col sm:flex-row gap-3 no-print">
+                        <button onclick="openAddItemModal()" class="flex-1 bg-slate-800 text-white p-4 rounded-xl font-bold shadow-md hover:bg-slate-900 transition flex items-center justify-center gap-2 active:scale-95">
+                            <i class="fas fa-plus-circle"></i> Add New Item
+                        </button>
+                        <button onclick="switchTab('inward')" class="flex-1 bg-white text-slate-700 border border-slate-200 p-4 rounded-xl font-bold shadow-sm hover:bg-slate-50 transition flex items-center justify-center gap-2 active:scale-95">
+                            <i class="fas fa-truck-loading"></i> Record Purchase
+                        </button>
+                    </div>
+
+                    <!-- Alerts -->
+                    <div id="alertSection" class="hidden bg-white border border-red-200 rounded-xl p-4 shadow-sm print-break">
+                        <h3 class="text-sm font-bold text-red-600 mb-2 flex items-center"><i class="fas fa-bell mr-2"></i> Critical Alerts</h3>
+                        <div id="alertList" class="text-sm text-slate-600 space-y-2"></div>
+                    </div>
+
+                    <!-- Category Breakdown -->
+                    <div class="print-break">
+                        <h3 class="font-bold text-slate-700 mb-3 ml-1 text-sm uppercase">Stock Breakdown</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" id="categoryGrid"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: ANALYTICS -->
+                <div id="tab-analytics" class="hidden-panel fade-in space-y-4 max-w-6xl mx-auto">
+                    <div class="flex justify-between items-center mb-2 no-print">
+                        <h2 class="text-lg font-bold text-slate-800">Analytics</h2>
+                        <button onclick="window.print()" class="bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm"><i class="fas fa-print mr-1"></i> Print</button>
+                    </div>
+
+                    <!-- Consumption Table -->
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 print-break">
+                        <div class="flex flex-col gap-3 mb-4">
+                            <h3 class="font-bold text-slate-700 flex items-center gap-2 text-sm">
+                                <i class="fas fa-calculator text-blue-600"></i> Consumption Prediction
+                            </h3>
+                            <div class="flex bg-slate-100 p-1 rounded-lg overflow-x-auto no-scrollbar">
+                                <button onclick="updateTopMovers('weekly')" id="btn-ana-weekly" class="ana-tab active px-4 py-1.5 rounded-md text-xs font-bold flex-1 text-center">Weekly</button>
+                                <button onclick="updateTopMovers('monthly')" id="btn-ana-monthly" class="ana-tab px-4 py-1.5 rounded-md text-xs font-bold text-slate-500 flex-1 text-center">Monthly</button>
+                                <button onclick="updateTopMovers('quarterly')" id="btn-ana-quarterly" class="ana-tab px-4 py-1.5 rounded-md text-xs font-bold text-slate-500 flex-1 text-center">Quarterly</button>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto -mx-4 px-4">
+                            <table class="w-full text-left text-sm min-w-[500px]">
+                                <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase">
+                                    <tr>
+                                        <th class="p-3 rounded-l-lg">Item</th>
+                                        <th class="p-3 text-right">Used</th>
+                                        <th class="p-3 text-right">Daily Burn</th>
+                                        <th class="p-3 text-center">Stock</th>
+                                        <th class="p-3 text-center rounded-r-lg">Days Left</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="topMoversBody" class="divide-y divide-slate-100">
+                                    <tr><td colspan="5" class="p-4 text-center text-slate-400">Loading analysis...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 print-break">
+                            <h3 class="font-bold text-slate-700 mb-4 text-xs uppercase">Stock Value</h3>
+                            <div class="h-64"><canvas id="valChart"></canvas></div>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 print-break">
+                            <h3 class="font-bold text-slate-700 mb-4 text-xs uppercase">Consumption Trend</h3>
+                            <div class="h-64"><canvas id="trendChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: INVENTORY LIST -->
+                <div id="tab-inventory" class="hidden-panel fade-in space-y-4 max-w-6xl mx-auto">
+                    <div class="flex flex-col gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-100 sticky top-0 z-10 no-print">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-lg font-bold text-slate-800">Master List</h2>
+                            <button onclick="window.print()" class="bg-white border border-slate-300 px-3 py-1.5 rounded-lg text-slate-600 text-xs"><i class="fas fa-print"></i></button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="searchInv" onkeyup="renderInventory()" placeholder="Search items..." class="border p-2.5 rounded-lg w-full focus:ring-2 focus:ring-slate-500 outline-none text-sm bg-slate-50">
+                            <button onclick="openAddItemModal()" class="bg-slate-800 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow whitespace-nowrap active:scale-95"><i class="fas fa-plus"></i></button>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden print-break">
+                        <div class="overflow-x-auto custom-scroll">
+                            <table class="w-full text-left text-sm min-w-[700px]">
+                                <thead class="bg-slate-100 text-slate-600 uppercase font-bold text-xs">
+                                    <tr>
+                                        <th class="p-4">Item Name</th>
+                                        <th class="p-4">Category</th>
+                                        <th class="p-4 text-right">Stock</th>
+                                        <th class="p-4 text-right">Value (₹)</th>
+                                        <th class="p-4 text-center">Sync</th>
+                                        <th class="p-4 text-center no-print">Edit</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inventoryTableBody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: STOCK IN -->
+                <div id="tab-inward" class="hidden-panel fade-in max-w-xl mx-auto no-print">
+                    <div class="bg-white p-5 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+                        <h2 class="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-arrow-down text-green-600"></i> Stock In (Purchase)</h2>
+                        <div class="space-y-5">
+                            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Select Item</label><select id="inwardSelect" class="w-full border p-3 rounded-xl bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-green-500"><option value="">Loading...</option></select></div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Qty Added</label><input type="number" id="inwardQty" class="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-green-500"></div>
+                                <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Total Cost (₹)</label><input type="number" id="inwardCost" class="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-green-500"></div>
+                            </div>
+                            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Supplier / Invoice</label><input type="text" id="inwardNote" class="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-green-500"></div>
+                            <button onclick="submitTransaction('IN')" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 active:scale-95 transition">Confirm Entry</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: STOCK OUT -->
+                <div id="tab-outward" class="hidden-panel fade-in max-w-xl mx-auto no-print">
+                    <div class="bg-white p-5 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+                        <h2 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2"><i class="fas fa-arrow-up text-red-600"></i> Stock Out (Manual)</h2>
+                        <p class="text-xs text-slate-500 bg-slate-100 p-2 rounded mb-6">Note: Packing material linked to Production is auto-deducted.</p>
+                        <div class="space-y-5">
+                            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Select Item</label><select id="outwardSelect" class="w-full border p-3 rounded-xl bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-red-500"><option value="">Loading...</option></select></div>
+                            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Qty Issued</label><input type="number" id="outwardQty" class="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-red-500"></div>
+                            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Reason / Dept</label><input type="text" id="outwardNote" class="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-red-500" placeholder="e.g. Accounts Dept"></div>
+                            <button onclick="submitTransaction('OUT')" class="w-full bg-red-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-red-700 active:scale-95 transition">Deduct Stock</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 6: LOGS -->
+                <div id="tab-logs" class="hidden-panel fade-in max-w-6xl mx-auto">
+                    <div class="flex justify-between items-center mb-4 no-print">
+                        <h2 class="text-lg font-bold text-slate-800">History</h2>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden print-break">
+                        <div class="overflow-x-auto custom-scroll">
+                            <table class="w-full text-left text-sm min-w-[600px]">
+                                <thead class="bg-slate-100 text-slate-600 uppercase font-bold text-xs">
+                                    <tr>
+                                        <th class="p-4">Time</th>
+                                        <th class="p-4">Item</th>
+                                        <th class="p-4">Type</th>
+                                        <th class="p-4 text-right">Qty</th>
+                                        <th class="p-4">Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logsTableBody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+
+        <!-- MOBILE BOTTOM NAV (Visible only on Tablets/Mobile < lg) -->
+        <nav class="lg:hidden bg-white border-t border-slate-200 flex justify-around items-center px-1 pb-safe pt-2 z-40 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] fixed bottom-0 w-full h-[80px]">
+            <button onclick="switchTab('dashboard')" id="nav-m-dashboard" class="flex flex-col items-center p-2 w-16 text-slate-400 active-nav-item"><i class="fas fa-chart-pie text-xl mb-1"></i><span class="text-[10px] font-bold">Home</span></button>
+            <button onclick="switchTab('inventory')" id="nav-m-inventory" class="flex flex-col items-center p-2 w-16 text-slate-400"><i class="fas fa-list text-xl mb-1"></i><span class="text-[10px] font-bold">List</span></button>
+            
+            <!-- Highlighted Action Button (Floating Look) -->
+            <div class="relative -top-6">
+                <button onclick="openAddItemModal()" class="flex flex-col items-center justify-center w-14 h-14 bg-slate-800 text-white rounded-full border-4 border-slate-50 shadow-xl active:scale-95 transition"><i class="fas fa-plus text-2xl"></i></button>
+            </div>
+
+            <button onclick="switchTab('analytics')" id="nav-m-analytics" class="flex flex-col items-center p-2 w-16 text-slate-400"><i class="fas fa-chart-bar text-xl mb-1"></i><span class="text-[10px] font-bold">Stats</span></button>
+            <button onclick="switchTab('logs')" id="nav-m-logs" class="flex flex-col items-center p-2 w-16 text-slate-400"><i class="fas fa-history text-xl mb-1"></i><span class="text-[10px] font-bold">Logs</span></button>
+        </nav>
+
+    </div>
+
+    <!-- MODAL: ADD/EDIT ITEM (Bottom Sheet on Mobile) -->
+    <div id="itemModal" class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm hidden flex items-end md:items-center justify-center p-0 md:p-4 no-print">
+        <!-- Animation Slide Up for Mobile -->
+        <div class="bg-white w-full md:max-w-lg rounded-t-3xl md:rounded-2xl shadow-2xl h-[90vh] md:h-auto flex flex-col animate-[slideUp_0.3s_ease-out] md:animate-[fadeIn_0.2s_ease-out]">
+            <div class="flex justify-between items-center p-5 border-b border-slate-100">
+                <h3 id="modalTitle" class="text-lg font-bold text-slate-800">Add Inventory Item</h3>
+                <button onclick="closeModal('itemModal')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 active:bg-slate-200"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-5 space-y-4 custom-scroll">
+                <input type="hidden" id="editItemId">
+                <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Item Name</label><input type="text" id="newItemName" placeholder="e.g. 375ml Hinged Container" class="w-full border p-3 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-slate-800"></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Category</label><input type="text" id="newItemCat" list="catList" placeholder="Select/Type" class="w-full border p-3 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-slate-800"><datalist id="catList"><option value="Packaging"><option value="Stationery"><option value="Housekeeping"><option value="Tools"><option value="Chemicals"></datalist></div>
+                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Unit</label><select id="newItemUnit" class="w-full border p-3 rounded-xl bg-slate-50 outline-none"><option value="pcs">Pieces</option><option value="kg">Kg</option><option value="box">Box</option><option value="roll">Roll</option><option value="ltr">Litre</option></select></div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Opening Stock</label><input type="number" id="newItemQty" class="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-slate-800"></div>
+                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Avg Cost (₹)</label><input type="number" id="newItemPrice" class="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-slate-800"></div>
+                </div>
+                <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Low Stock Alert at</label><input type="number" id="newItemThreshold" placeholder="e.g. 10" class="w-full border p-3 rounded-xl bg-red-50 outline-none focus:ring-2 focus:ring-red-500"></div>
+                
+                <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2"><i class="fas fa-magic text-blue-600"></i><span class="font-bold text-blue-900 text-sm">Smart Production Sync</span></div>
+                        <label class="inline-flex items-center cursor-pointer"><input type="checkbox" id="newItemAutoDeduct" class="sr-only peer" onchange="toggleDeductInput()"><div class="relative w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label>
+                    </div>
+                    <div id="deductInputDiv" class="hidden mt-3 space-y-3 pt-3 border-t border-blue-200">
+                        <div><label class="block text-xs font-bold text-blue-700 uppercase mb-1">Deduct Ratio</label><input type="number" id="newItemRatio" step="0.01" value="1" placeholder="e.g. 1" class="w-full border border-blue-200 p-2 rounded-lg text-sm"><p class="text-[10px] text-blue-500 mt-1">Example: 1 Packaging Box for 1 Ordered Item.</p></div>
+                        <div><label class="block text-xs font-bold text-blue-700 uppercase mb-1">Link to Specific Microgreens?</label><p class="text-[10px] text-blue-500 mb-2">If checked, deducted ONLY for selected varieties. Unchecked = Global (All orders).</p><div class="bg-white border border-blue-200 rounded-lg p-2 max-h-32 overflow-y-auto custom-scroll" id="microgreenChecklist"><p class="text-xs text-gray-400 p-2">Loading varieties from menu...</p></div></div>
+                    </div>
+                </div>
+                <!-- Extra padding for scrolling on mobile -->
+                <div class="h-10 md:hidden"></div>
+            </div>
+            <div class="p-5 border-t border-slate-100 pb-safe bg-white rounded-b-xl">
+                <button onclick="saveNewItem()" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-black transition active:scale-95">Save Item</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl z-[100] transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-3 text-sm font-bold min-w-[200px] justify-center no-print">
+        <i class="fas fa-check-circle text-green-400"></i> <span id="toastMsg">Success</span>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getDatabase, ref, set, onValue, push, update, remove, serverTimestamp, query, orderByChild, equalTo, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyCtR2jdbu-SZ-7obmg88fPksJnNxk9BnqQ", authDomain: "oligo-store.firebaseapp.com", projectId: "oligo-store", storageBucket: "oligo-store.firebasestorage.app", messagingSenderId: "891788554016", appId: "1:891788554016:web:206c7da0a562fb7b1bf145" };
+        const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getDatabase(app);
+
+        let currentUser = null;
+        let inventoryData = {};
+        let storeLogs = {};
+        let allMicrogreens = [];
+        let valChartInstance = null;
+        let trendChartInstance = null;
+        let currentAnalyticsTimeframe = 'weekly';
+
+        // AUTH
+        document.getElementById('loginForm').onsubmit = (e) => { e.preventDefault(); signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPass').value).catch(err => showToast(err.message)); };
+        window.logout = () => signOut(auth);
+        onAuthStateChanged(auth, user => { if (user) { currentUser = user; document.getElementById('authView').classList.add('hidden'); document.getElementById('mainView').classList.remove('hidden'); document.getElementById('printDate').innerText += new Date().toLocaleString(); initStore(); } else { document.getElementById('authView').classList.remove('hidden'); document.getElementById('mainView').classList.add('hidden'); } });
+
+        function initStore() {
+            onValue(ref(db, 'store_inventory'), snap => { inventoryData = snap.val() || {}; renderDashboard(); renderInventory(); populateDropdowns(); renderAnalytics(); });
+            onValue(ref(db, 'store_logs'), snap => { storeLogs = snap.val() || {}; renderLogs(storeLogs); renderAnalytics(); });
+            onValue(ref(db, 'menus'), snap => {
+                const data = snap.val(); const varietySet = new Set();
+                if(data) Object.values(data).forEach(prodMenu => Object.values(prodMenu).forEach(item => { if(item.name) varietySet.add(item.name); }));
+                allMicrogreens = Array.from(varietySet).sort(); populateMicrogreenChecklist([]);
+            });
+            initProductionSync();
+        }
+
+        // --- ANALYTICS ---
+        window.updateTopMovers = (period) => {
+            currentAnalyticsTimeframe = period;
+            document.querySelectorAll('.ana-tab').forEach(b => {
+                b.classList.remove('active', 'text-white', 'bg-slate-800');
+                b.classList.add('text-slate-500');
+                if(b.id === `btn-ana-${period}`) {
+                    b.classList.add('active', 'text-white', 'bg-slate-800');
+                    b.classList.remove('text-slate-500');
+                }
+            });
+            renderTopMoversTable();
+        };
+
+        function renderAnalytics() {
+            // 1. Valuation Pie Chart
+            const catValues = {};
+            Object.values(inventoryData).forEach(i => {
+                const val = (parseFloat(i.qty)||0) * (parseFloat(i.avgCost)||0);
+                catValues[i.category] = (catValues[i.category] || 0) + val;
+            });
+
+            if(valChartInstance) valChartInstance.destroy();
+            const ctxVal = document.getElementById('valChart').getContext('2d');
+            valChartInstance = new Chart(ctxVal, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(catValues),
+                    datasets: [{ data: Object.values(catValues), backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // 2. Trend Chart (Fixed 7 Days for visual trend)
+            const trendData = { labels: [], data: [] };
+            const today = new Date();
+            for(let i=6; i>=0; i--) {
+                const d = new Date(today); d.setDate(today.getDate() - i);
+                trendData.labels.push(d.toLocaleDateString(undefined, {weekday:'short'}));
+                trendData.data.push(0);
+            }
+
+            Object.values(storeLogs).forEach(log => {
+                if(log.type === 'OUT' || log.type === 'AUTO') {
+                    const logDate = new Date(log.date);
+                    const diffTime = Math.abs(today - logDate);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                    if(diffDays <= 7) {
+                        const dayIndex = 7 - diffDays;
+                        if(dayIndex >= 0) trendData.data[dayIndex]++;
+                    }
+                }
+            });
+
+            if(trendChartInstance) trendChartInstance.destroy();
+            const ctxTrend = document.getElementById('trendChart').getContext('2d');
+            trendChartInstance = new Chart(ctxTrend, {
+                type: 'line',
+                data: {
+                    labels: trendData.labels,
+                    datasets: [{ label: 'Transactions', data: trendData.data, borderColor: '#f59e0b', tension: 0.3, fill: true, backgroundColor: 'rgba(245, 158, 11, 0.1)' }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            renderTopMoversTable();
+        }
+
+        function renderTopMoversTable() {
+            const daysMap = { 'weekly': 7, 'monthly': 30, 'quarterly': 90 };
+            const days = daysMap[currentAnalyticsTimeframe];
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - days);
+
+            const itemUsage = {};
+            
+            Object.values(storeLogs).forEach(log => {
+                const logDate = new Date(log.date);
+                if((log.type === 'OUT' || log.type === 'AUTO') && logDate >= cutoffDate) {
+                    if(log.type === 'AUTO' && log.details) {
+                        log.details.forEach(d => itemUsage[d.itemName] = (itemUsage[d.itemName] || 0) + parseFloat(d.deducted));
+                    } else if(log.item) {
+                        itemUsage[log.item] = (itemUsage[log.item] || 0) + parseFloat(log.qty);
+                    }
+                }
+            });
+
+            const tbody = document.getElementById('topMoversBody');
+            tbody.innerHTML = '';
+            
+            const sortedItems = Object.entries(itemUsage).sort((a,b) => b[1] - a[1]);
+            
+            if(sortedItems.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 italic">No consumption recorded in this period.</td></tr>`;
+                return;
+            }
+
+            sortedItems.slice(0, 10).forEach(([name, consumedQty]) => {
+                let unit = 'units';
+                let currentStock = 0;
+                const foundItem = Object.values(inventoryData).find(i => i.name === name);
+                
+                if(foundItem) {
+                    unit = foundItem.unit;
+                    currentStock = parseFloat(foundItem.qty) || 0;
+                }
+
+                // Calculations
+                const dailyBurnRate = consumedQty / days;
+                let daysRemaining = 999;
+                if(dailyBurnRate > 0) {
+                    daysRemaining = Math.floor(currentStock / dailyBurnRate);
+                }
+
+                // Visual Badge Logic
+                let predictionHtml = `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Safe (>30 Days)</span>`;
+                if(daysRemaining < 7) {
+                    predictionHtml = `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold animate-pulse">Critical (${daysRemaining} Days)</span>`;
+                } else if (daysRemaining < 14) {
+                    predictionHtml = `<span class="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold">Low (${daysRemaining} Days)</span>`;
+                } else if (daysRemaining < 30) {
+                    predictionHtml = `<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold">${daysRemaining} Days</span>`;
+                }
+
+                tbody.innerHTML += `
+                <tr class="border-b hover:bg-slate-50 transition">
+                    <td class="p-3 pl-4 font-bold text-slate-700">${name}</td>
+                    <td class="p-3 text-right font-mono text-slate-600">${consumedQty.toFixed(1)} <span class="text-[10px] text-slate-400">${unit}</span></td>
+                    <td class="p-3 text-right font-mono text-slate-500">${dailyBurnRate.toFixed(2)} / day</td>
+                    <td class="p-3 text-center font-bold text-slate-800">${currentStock.toFixed(1)}</td>
+                    <td class="p-3 text-center">${predictionHtml}</td>
+                </tr>`;
+            });
+        }
+
+        // --- DASHBOARD & INVENTORY RENDERING (Standard) ---
+        function renderDashboard() {
+            let totalItems = 0, totalValue = 0, lowStockCount = 0, autoSyncCount = 0;
+            const alerts = [], cats = {};
+            Object.entries(inventoryData).forEach(([id, item]) => {
+                totalItems++;
+                const qty = parseFloat(item.qty) || 0;
+                totalValue += qty * (parseFloat(item.avgCost) || 0);
+                if (qty <= (item.threshold || 0)) { lowStockCount++; alerts.push(`${item.name}: ${qty} ${item.unit} left`); }
+                if (item.autoDeduct) autoSyncCount++;
+                cats[item.category] = (cats[item.category] || 0) + 1;
+            });
+            document.getElementById('kpiTotalItems').innerText = totalItems;
+            document.getElementById('kpiValuation').innerText = "₹" + totalValue.toLocaleString();
+            document.getElementById('kpiLowStock').innerText = lowStockCount;
+            document.getElementById('kpiAutoSync').innerText = autoSyncCount;
+            const alertBox = document.getElementById('alertSection'), alertList = document.getElementById('alertList');
+            if (alerts.length > 0) { alertBox.classList.remove('hidden'); alertList.innerHTML = alerts.map(a => `<div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>${a}</div>`).join(''); } else { alertBox.classList.add('hidden'); }
+            document.getElementById('categoryGrid').innerHTML = Object.entries(cats).map(([cat, count]) => `<div class="bg-white p-3 rounded-xl text-center border border-slate-100 shadow-sm"><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">${cat}</p><p class="text-xl font-bold text-slate-700">${count}</p></div>`).join('');
+        }
+
+        window.renderInventory = () => {
+            const tbody = document.getElementById('inventoryTableBody'); tbody.innerHTML = '';
+            const query = document.getElementById('searchInv').value.toLowerCase();
+            Object.entries(inventoryData).sort((a,b) => a[1].name.localeCompare(b[1].name)).forEach(([id, item]) => {
+                if (item.name.toLowerCase().includes(query) || item.category.toLowerCase().includes(query)) {
+                    const qty = parseFloat(item.qty).toFixed(1); const val = (qty * item.avgCost).toFixed(0);
+                    let linkDisplay = '<span class="text-slate-300">-</span>';
+                    if(item.autoDeduct) linkDisplay = (item.linkedVarieties && item.linkedVarieties.length > 0) ? `<span class="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-200">${item.linkedVarieties.length} Linked</span>` : `<span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded border border-blue-200">Global</span>`;
+                    tbody.innerHTML += `<tr class="hover:bg-slate-50 border-b group"><td class="p-4 font-bold text-slate-700">${item.name}</td><td class="p-4"><span class="text-xs bg-slate-100 px-2 py-1 rounded border border-slate-200 text-slate-500">${item.category}</span></td><td class="p-4 text-right font-mono font-bold text-slate-700">${qty} <span class="text-xs text-slate-400 font-normal ml-1">${item.unit}</span></td><td class="p-4 text-right text-xs text-slate-500">₹${val}</td><td class="p-4 text-center">${linkDisplay}</td><td class="p-4 text-center flex justify-center gap-3 no-print"><button onclick="editItem('${id}')" class="text-blue-500 hover:text-blue-700 transition"><i class="fas fa-edit"></i></button><button onclick="deleteItem('${id}')" class="text-red-300 hover:text-red-600 transition"><i class="fas fa-trash"></i></button></td></tr>`;
+                }
+            });
+        };
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('logsTableBody'); tbody.innerHTML = '';
+            Object.values(logs).sort((a,b) => b.date - a.date).slice(0, 50).forEach(log => {
+                const typeColor = log.type === 'IN' ? 'text-green-600 bg-green-50' : (log.type === 'OUT' ? 'text-red-600 bg-red-50' : 'text-blue-600 bg-blue-50');
+                let detailText = log.note; if(log.details) detailText += ` <span class="text-xs text-gray-400 block">(${log.details.map(d=>d.itemName).join(', ')})</span>`;
+                tbody.innerHTML += `<tr class="border-b"><td class="p-4 text-xs text-slate-400">${new Date(log.date).toLocaleDateString()}</td><td class="p-4 font-bold text-slate-700">${log.item || 'Multiple'}</td><td class="p-4"><span class="px-2 py-1 rounded text-[10px] font-bold ${typeColor}">${log.type}</span></td><td class="p-4 text-right font-mono">${parseFloat(log.qty || 0).toFixed(1)}</td><td class="p-4 text-sm">${detailText}</td></tr>`;
+            });
+        }
+
+        // --- PRODUCTION SYNC & TRANSACTIONS (FIXED & ROBUST) ---
+        function initProductionSync() {
+            const ordersRef = query(ref(db, 'orders'), limitToLast(300));
+            onValue(ordersRef, (snapshot) => {
+                const orders = snapshot.val(); 
+                if (!orders) return; 
+                document.getElementById('syncIndicator').classList.remove('hidden');
+                
+                Object.entries(orders).forEach(([orderId, order]) => {
+                    if ((order.status === 'READY_FOR_PICKUP' || order.status === 'DELIVERED') && !order.packagingDeducted) {
+                        processOrderDeduction(orderId, order);
+                    }
+                });
+            });
+        }
+
+        function processOrderDeduction(orderId, order) {
+            let orderItems = Array.isArray(order.items) ? order.items : Object.values(order.items || {}); 
+            if (orderItems.length === 0) return;
+
+            const totalBoxes = orderItems.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
+            const updates = {}; 
+            const logEntry = { date: serverTimestamp(), type: 'AUTO', note: `Order #${orderId.slice(-4)} (${order.status})`, user: 'System', details: [] };
+            let deducted = false;
+
+            Object.entries(inventoryData).forEach(([itemId, invItem]) => {
+                if (invItem.autoDeduct && invItem.deductRatio > 0) {
+                    let qtyToDeduct = 0;
+                    if (invItem.linkedVarieties && invItem.linkedVarieties.length > 0) {
+                        orderItems.forEach(ordItem => { 
+                            const orderItemName = (ordItem.name || "").trim().toLowerCase();
+                            const isMatch = invItem.linkedVarieties.some(linked => linked.trim().toLowerCase() === orderItemName);
+                            if (isMatch) qtyToDeduct += (parseInt(ordItem.qty) || 0);
+                        });
+                    } else { 
+                        qtyToDeduct = totalBoxes; 
+                    }
+                    qtyToDeduct = qtyToDeduct * invItem.deductRatio;
+                    if (qtyToDeduct > 0) {
+                        updates[`store_inventory/${itemId}/qty`] = (invItem.qty || 0) - qtyToDeduct;
+                        logEntry.details.push({ itemName: invItem.name, deducted: qtyToDeduct }); 
+                        deducted = true;
+                    }
+                }
+            });
+
+            if (deducted) { 
+                updates[`orders/${orderId}/packagingDeducted`] = true; 
+                const newLogKey = push(ref(db, 'store_logs')).key; 
+                updates[`store_logs/${newLogKey}`] = logEntry; 
+                update(ref(db), updates).then(() => showToast(`Synced: Stock deducted for Order #${orderId.slice(-4)}`)); 
+            } else { 
+                update(ref(db, `orders/${orderId}`), { packagingDeducted: true }); 
+            }
+        }
+
+        window.submitTransaction = (type) => {
+            const selectId = type === 'IN' ? 'inwardSelect' : 'outwardSelect'; const qtyId = type === 'IN' ? 'inwardQty' : 'outwardQty'; const noteId = type === 'IN' ? 'inwardNote' : 'outwardNote';
+            const itemId = document.getElementById(selectId).value, qty = parseFloat(document.getElementById(qtyId).value), note = document.getElementById(noteId).value;
+            if (!itemId || !qty || qty <= 0) return showToast("Invalid Entry");
+            const item = inventoryData[itemId]; let newQty = parseFloat(item.qty), avgCost = parseFloat(item.avgCost) || 0;
+            if (type === 'IN') { const totalCost = parseFloat(document.getElementById('inwardCost').value) || 0; if (totalCost > 0) newQty += qty; avgCost = ((newQty-qty)*avgCost + totalCost) / newQty; } else { if (qty > newQty) return showToast("Insufficient Stock!"); newQty -= qty; }
+            const updates = {}; updates[`store_inventory/${itemId}/qty`] = newQty; if (type === 'IN') updates[`store_inventory/${itemId}/avgCost`] = avgCost;
+            const logKey = push(ref(db, 'store_logs')).key; updates[`store_logs/${logKey}`] = { date: serverTimestamp(), type: type, item: item.name, qty: qty, note: note, user: currentUser.email.split('@')[0] };
+            update(ref(db), updates).then(() => { showToast("Saved"); document.getElementById(qtyId).value = ''; document.getElementById(noteId).value = ''; });
+        };
+
+        // --- UTILS & MODAL ---
+        function populateDropdowns() {
+            const s1 = document.getElementById('inwardSelect'), s2 = document.getElementById('outwardSelect'); s1.innerHTML = s2.innerHTML = '<option value="">-- Select Item --</option>';
+            Object.entries(inventoryData).sort((a,b) => a[1].name.localeCompare(b[1].name)).forEach(([id, item]) => { const opt = `<option value="${id}">${item.name} (${parseFloat(item.qty).toFixed(1)} ${item.unit})</option>`; s1.innerHTML += opt; s2.innerHTML += opt; });
+        }
+
+        window.openAddItemModal = () => { document.getElementById('modalTitle').innerText = "Add Inventory Item"; document.getElementById('editItemId').value = ""; document.getElementById('newItemName').value = ""; document.getElementById('newItemCat').value = ""; document.getElementById('newItemQty').value = ""; document.getElementById('newItemUnit').value = "pcs"; document.getElementById('newItemPrice').value = ""; document.getElementById('newItemThreshold').value = ""; document.getElementById('newItemAutoDeduct').checked = false; document.getElementById('newItemRatio').value = 1; toggleDeductInput(); populateMicrogreenChecklist([]); document.getElementById('itemModal').classList.remove('hidden'); };
+        window.editItem = (id) => { const item = inventoryData[id]; if (!item) return; document.getElementById('modalTitle').innerText = "Edit Inventory Item"; document.getElementById('editItemId').value = id; document.getElementById('newItemName').value = item.name; document.getElementById('newItemCat').value = item.category; document.getElementById('newItemQty').value = item.qty; document.getElementById('newItemUnit').value = item.unit; document.getElementById('newItemPrice').value = item.avgCost; document.getElementById('newItemThreshold').value = item.threshold; const isSync = item.autoDeduct || false; document.getElementById('newItemAutoDeduct').checked = isSync; document.getElementById('newItemRatio').value = item.deductRatio || 1; populateMicrogreenChecklist(item.linkedVarieties || []); toggleDeductInput(); document.getElementById('itemModal').classList.remove('hidden'); };
+        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+        window.toggleDeductInput = () => { const isChecked = document.getElementById('newItemAutoDeduct').checked; if (isChecked) document.getElementById('deductInputDiv').classList.remove('hidden'); else document.getElementById('deductInputDiv').classList.add('hidden'); };
+        
+        function populateMicrogreenChecklist(selectedItems = []) {
+            const container = document.getElementById('microgreenChecklist');
+            if (allMicrogreens.length === 0) { container.innerHTML = '<p class="text-xs text-gray-400 italic">No microgreens found in Production Menu.</p>'; return; }
+            container.innerHTML = allMicrogreens.map(name => { const isChecked = selectedItems.includes(name) ? 'checked' : ''; return `<label class="flex items-center space-x-2 py-1 cursor-pointer hover:bg-blue-50 rounded"><input type="checkbox" name="linkedVariety" value="${name}" ${isChecked} class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"><span class="text-xs text-gray-700">${name}</span></label>`}).join('');
+        }
+
+        window.saveNewItem = () => {
+            const id = document.getElementById('editItemId').value; const name = document.getElementById('newItemName').value; const cat = document.getElementById('newItemCat').value; const qty = parseFloat(document.getElementById('newItemQty').value) || 0; const unit = document.getElementById('newItemUnit').value; const price = parseFloat(document.getElementById('newItemPrice').value) || 0; const threshold = parseFloat(document.getElementById('newItemThreshold').value) || 0; const autoDeduct = document.getElementById('newItemAutoDeduct').checked; const ratio = parseFloat(document.getElementById('newItemRatio').value) || 0; const linkedVarieties = Array.from(document.querySelectorAll('input[name="linkedVariety"]:checked')).map(cb => cb.value);
+            if(!name || !cat) return showToast("Name required");
+            const data = { name, category: cat, qty, unit, avgCost: price, threshold, autoDeduct, deductRatio: ratio, linkedVarieties: linkedVarieties };
+            if (id) update(ref(db, `store_inventory/${id}`), data).then(() => { closeModal('itemModal'); showToast("Item Updated"); }); else push(ref(db, 'store_inventory'), data).then(() => { closeModal('itemModal'); showToast("Item Created"); });
+        };
+
+        window.deleteItem = (id) => { if(confirm("Delete item? Log history will remain.")) remove(ref(db, `store_inventory/${id}`)); };
+        window.switchTab = (tab) => {
+            document.querySelectorAll('.active-panel').forEach(e => { e.classList.remove('active-panel'); e.classList.add('hidden-panel'); });
+            document.getElementById('tab-'+tab).classList.remove('hidden-panel'); document.getElementById('tab-'+tab).classList.add('active-panel');
+            
+            // Desktop Nav Update
+            document.querySelectorAll('.nav-item').forEach(e => { e.classList.remove('active-nav-item', 'bg-slate-800', 'text-white'); e.classList.add('text-slate-600', 'hover:bg-slate-50'); });
+            const dNav = document.getElementById('nav-d-'+tab); if(dNav) { dNav.classList.add('active-nav-item', 'bg-slate-800', 'text-white'); dNav.classList.remove('text-slate-600', 'hover:bg-slate-50'); }
+            
+            // Mobile Nav Update
+            const mNav = document.getElementById('nav-m-'+tab); 
+            if(mNav) { 
+                document.querySelectorAll('[id^="nav-m-"]').forEach(b => b?.classList.remove('text-slate-900', 'active-nav-item')); 
+                mNav.classList.add('text-slate-900', 'active-nav-item'); 
+            }
+            
+            // Desktop Sidebar Page Title Sync
+            const titles = { 'dashboard': 'Dashboard', 'inventory': 'Master List', 'inward': 'Stock In', 'outward': 'Stock Out', 'analytics': 'Analytics', 'logs': 'Logs' };
+            const pageTitleDesktop = document.getElementById('pageTitleDesktop');
+            if(pageTitleDesktop) pageTitleDesktop.innerText = titles[tab] || 'Store Dept.';
+        };
+        function showToast(msg) { const t = document.getElementById('toast'); document.getElementById('toastMsg').innerText = msg; t.style.opacity = '1'; t.style.top = '24px'; setTimeout(() => { t.style.opacity = '0'; t.style.top = '5px'; }, 3000); }
+        
+        // EXPORT FOR HTML
+        window.openAddItemModal = openAddItemModal; window.editItem = editItem; window.closeModal = closeModal; window.toggleDeductInput = toggleDeductInput; window.saveNewItem = saveNewItem; window.deleteItem = deleteItem; window.switchTab = switchTab; window.renderInventory = renderInventory; window.submitTransaction = submitTransaction;
+        window.updateTopMovers = updateTopMovers;
+    </script>
+</body>
+</html>
