@@ -301,6 +301,36 @@
                     <div class="flex justify-between items-center mb-4 no-print">
                         <h2 class="text-lg font-bold text-slate-800">History</h2>
                     </div>
+
+                    <!-- DAILY BOX DEDUCTIONS REPORT -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4 print-break">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3 no-print">
+                            <h3 class="font-bold text-slate-700 flex items-center gap-2 text-sm">
+                                <i class="fas fa-box-open text-blue-600"></i> Daily Box Deductions
+                            </h3>
+                            <div class="flex items-center gap-2">
+                                <input type="date" id="deductReportDate" class="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-slate-800" onchange="renderDeductionsReport()">
+                                <button onclick="window.print()" class="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-200 transition"><i class="fas fa-print mr-1"></i> Print</button>
+                            </div>
+                        </div>
+                        <!-- Summary tiles -->
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3" id="deductSummaryTiles"></div>
+                        <!-- Per-item breakdown table -->
+                        <div class="overflow-x-auto custom-scroll">
+                            <table class="w-full text-left text-sm min-w-[500px]">
+                                <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-[11px]">
+                                    <tr>
+                                        <th class="p-3 pl-4">Packaging Item</th>
+                                        <th class="p-3 text-right">Qty Deducted</th>
+                                        <th class="p-3 text-right">Orders</th>
+                                        <th class="p-3 text-right">Remaining Stock</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="deductReportBody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden print-break">
                         <div class="overflow-x-auto custom-scroll">
                             <table class="w-full text-left text-sm min-w-[600px]">
@@ -365,8 +395,13 @@
                         <label class="inline-flex items-center cursor-pointer"><input type="checkbox" id="newItemAutoDeduct" class="sr-only peer" onchange="toggleDeductInput()"><div class="relative w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label>
                     </div>
                     <div id="deductInputDiv" class="hidden mt-3 space-y-3 pt-3 border-t border-blue-200">
-                        <div><label class="block text-xs font-bold text-blue-700 uppercase mb-1">Deduct Ratio</label><input type="number" id="newItemRatio" step="0.01" value="1" placeholder="e.g. 1" class="w-full border border-blue-200 p-2 rounded-lg text-sm"><p class="text-[10px] text-blue-500 mt-1">Example: 1 Packaging Box for 1 Ordered Item.</p></div>
-                        <div><label class="block text-xs font-bold text-blue-700 uppercase mb-1">Link to Specific Microgreens?</label><p class="text-[10px] text-blue-500 mb-2">If checked, deducted ONLY for selected varieties. Unchecked = Global (All orders).</p><div class="bg-white border border-blue-200 rounded-lg p-2 max-h-32 overflow-y-auto custom-scroll" id="microgreenChecklist"><p class="text-xs text-gray-400 p-2">Loading varieties from menu...</p></div></div>
+                        <div><label class="block text-xs font-bold text-blue-700 uppercase mb-1">Deduct Ratio</label><input type="number" id="newItemRatio" step="0.01" value="1" placeholder="e.g. 1" class="w-full border border-blue-200 p-2 rounded-lg text-sm"><p class="text-[10px] text-blue-500 mt-1">Example: 1 box of Mustard ordered = 1 unit of this packaging deducted (ratio 1). Use 2 if each box needs 2 units (e.g. lid + base).</p></div>
+                        <div>
+                            <label class="block text-xs font-bold text-blue-700 uppercase mb-1">Link to Specific Microgreens (Required)</label>
+                            <p class="text-[10px] text-blue-500 mb-2">Select every variety that uses THIS exact packaging. Stock will only be deducted when an order contains a linked variety — e.g. link "Mustard" here so 20 boxes of Mustard deducts exactly 20 of this container.</p>
+                            <div class="bg-white border border-blue-200 rounded-lg p-2 max-h-32 overflow-y-auto custom-scroll" id="microgreenChecklist"><p class="text-xs text-gray-400 p-2">Loading varieties from menu...</p></div>
+                            <p id="noLinkWarning" class="hidden text-[10px] text-red-600 font-bold mt-2 bg-red-50 border border-red-200 rounded-lg p-2"><i class="fas fa-triangle-exclamation mr-1"></i>No variety selected — this item will NOT auto-deduct until at least one microgreen is linked.</p>
+                        </div>
                     </div>
                 </div>
                 <!-- Extra padding for scrolling on mobile -->
@@ -578,7 +613,7 @@
                 if (item.name.toLowerCase().includes(query) || item.category.toLowerCase().includes(query)) {
                     const qty = parseFloat(item.qty).toFixed(1); const val = (qty * item.avgCost).toFixed(0);
                     let linkDisplay = '<span class="text-slate-300">-</span>';
-                    if(item.autoDeduct) linkDisplay = (item.linkedVarieties && item.linkedVarieties.length > 0) ? `<span class="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-200">${item.linkedVarieties.length} Linked</span>` : `<span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded border border-blue-200">Global</span>`;
+                    if(item.autoDeduct) linkDisplay = (item.linkedVarieties && item.linkedVarieties.length > 0) ? `<span class="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-200">${item.linkedVarieties.length} Linked</span>` : `<span class="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded border border-red-200"><i class="fas fa-triangle-exclamation mr-1"></i>Not Linked</span>`;
                     tbody.innerHTML += `<tr class="hover:bg-slate-50 border-b group"><td class="p-4 font-bold text-slate-700">${item.name}</td><td class="p-4"><span class="text-xs bg-slate-100 px-2 py-1 rounded border border-slate-200 text-slate-500">${item.category}</span></td><td class="p-4 text-right font-mono font-bold text-slate-700">${qty} <span class="text-xs text-slate-400 font-normal ml-1">${item.unit}</span></td><td class="p-4 text-right text-xs text-slate-500">₹${val}</td><td class="p-4 text-center">${linkDisplay}</td><td class="p-4 text-center flex justify-center gap-3 no-print"><button onclick="editItem('${id}')" class="text-blue-500 hover:text-blue-700 transition"><i class="fas fa-edit"></i></button><button onclick="deleteItem('${id}')" class="text-red-300 hover:text-red-600 transition"><i class="fas fa-trash"></i></button></td></tr>`;
                 }
             });
@@ -589,9 +624,83 @@
             Object.values(logs).sort((a,b) => b.date - a.date).slice(0, 50).forEach(log => {
                 const typeColor = log.type === 'IN' ? 'text-green-600 bg-green-50' : (log.type === 'OUT' ? 'text-red-600 bg-red-50' : 'text-blue-600 bg-blue-50');
                 let detailText = log.note; if(log.details) detailText += ` <span class="text-xs text-gray-400 block">(${log.details.map(d=>d.itemName).join(', ')})</span>`;
-                tbody.innerHTML += `<tr class="border-b"><td class="p-4 text-xs text-slate-400">${new Date(log.date).toLocaleDateString()}</td><td class="p-4 font-bold text-slate-700">${log.item || 'Multiple'}</td><td class="p-4"><span class="px-2 py-1 rounded text-[10px] font-bold ${typeColor}">${log.type}</span></td><td class="p-4 text-right font-mono">${parseFloat(log.qty || 0).toFixed(1)}</td><td class="p-4 text-sm">${detailText}</td></tr>`;
+                // FIX: AUTO logs store quantities inside details[] (one entry per packaging item deducted),
+                // not in a top-level log.qty. Sum them so the Qty column shows the real total instead of 0.0.
+                let displayQty;
+                if (log.type === 'AUTO' && Array.isArray(log.details) && log.details.length > 0) {
+                    const total = log.details.reduce((sum, d) => sum + (parseFloat(d.deducted) || 0), 0);
+                    displayQty = total.toFixed(1);
+                } else {
+                    displayQty = parseFloat(log.qty || 0).toFixed(1);
+                }
+                tbody.innerHTML += `<tr class="border-b"><td class="p-4 text-xs text-slate-400">${new Date(log.date).toLocaleDateString()}</td><td class="p-4 font-bold text-slate-700">${log.item || 'Multiple'}</td><td class="p-4"><span class="px-2 py-1 rounded text-[10px] font-bold ${typeColor}">${log.type}</span></td><td class="p-4 text-right font-mono">${displayQty}</td><td class="p-4 text-sm">${detailText}</td></tr>`;
             });
+            renderDeductionsReport();
         }
+
+        // ── DAILY BOX DEDUCTIONS REPORT ─────────────────────────────────────
+        // Shows, for a selected date (default = today), how many boxes/packaging
+        // units were auto-deducted per item, how many orders triggered it, and
+        // current remaining stock for quick reference.
+        window.renderDeductionsReport = function() {
+            const dateInput = document.getElementById('deductReportDate');
+            if (!dateInput) return;
+            if (!dateInput.value) {
+                const today = new Date();
+                dateInput.value = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+            }
+            const selectedDate = dateInput.value; // YYYY-MM-DD
+
+            const itemTotals = {};   // itemName -> { qty, orderCount }
+            let totalBoxes = 0;
+            let totalOrders = 0;
+            const seenOrderNotes = new Set();
+
+            Object.values(storeLogs || {}).forEach(log => {
+                if (log.type !== 'AUTO' || !Array.isArray(log.details)) return;
+                const logDate = new Date(log.date);
+                const logDateStr = logDate.getFullYear() + '-' + String(logDate.getMonth()+1).padStart(2,'0') + '-' + String(logDate.getDate()).padStart(2,'0');
+                if (logDateStr !== selectedDate) return;
+
+                if (!seenOrderNotes.has(log.note)) { seenOrderNotes.add(log.note); totalOrders++; }
+
+                log.details.forEach(d => {
+                    const qty = parseFloat(d.deducted) || 0;
+                    if (!itemTotals[d.itemName]) itemTotals[d.itemName] = { qty: 0, orders: new Set() };
+                    itemTotals[d.itemName].qty += qty;
+                    itemTotals[d.itemName].orders.add(log.note);
+                    totalBoxes += qty;
+                });
+            });
+
+            // Summary tiles
+            const tiles = document.getElementById('deductSummaryTiles');
+            const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+            const itemCount = Object.keys(itemTotals).length;
+            tiles.innerHTML =
+                '<div class="bg-blue-50 border border-blue-100 rounded-xl p-3"><p class="text-[10px] font-bold text-blue-400 uppercase">Date</p><h3 class="text-sm font-bold text-blue-700 mt-1">' + dateLabel + '</h3></div>' +
+                '<div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3"><p class="text-[10px] font-bold text-emerald-400 uppercase">Total Boxes Deducted</p><h3 class="text-2xl font-bold text-emerald-700 mt-1">' + totalBoxes.toFixed(1) + '</h3></div>' +
+                '<div class="bg-amber-50 border border-amber-100 rounded-xl p-3"><p class="text-[10px] font-bold text-amber-500 uppercase">Orders Synced</p><h3 class="text-2xl font-bold text-amber-700 mt-1">' + totalOrders + '</h3></div>';
+
+            // Per-item table
+            const body = document.getElementById('deductReportBody');
+            if (itemCount === 0) {
+                body.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-slate-400 italic">No box deductions recorded for this date.</td></tr>';
+                return;
+            }
+            const sorted = Object.entries(itemTotals).sort((a,b) => b[1].qty - a[1].qty);
+            body.innerHTML = sorted.map(([name, info]) => {
+                const invItem = Object.values(inventoryData || {}).find(i => i.name === name);
+                const remaining = invItem ? parseFloat(invItem.qty || 0).toFixed(1) : '—';
+                const unit = invItem ? invItem.unit : '';
+                return '<tr class="hover:bg-slate-50">'
+                    + '<td class="p-3 pl-4 font-bold text-slate-700">' + name + '</td>'
+                    + '<td class="p-3 text-right font-mono text-slate-800 font-bold">' + info.qty.toFixed(1) + '</td>'
+                    + '<td class="p-3 text-right text-slate-500">' + info.orders.size + '</td>'
+                    + '<td class="p-3 text-right font-mono text-slate-600">' + remaining + ' <span class="text-[10px] text-slate-400">' + unit + '</span></td>'
+                    + '</tr>';
+            }).join('');
+        };
 
         // --- PRODUCTION SYNC & TRANSACTIONS (FIXED & ROBUST) ---
         function initProductionSync() {
@@ -613,23 +722,27 @@
             let orderItems = Array.isArray(order.items) ? order.items : Object.values(order.items || {}); 
             if (orderItems.length === 0) return;
 
-            const totalBoxes = orderItems.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
             const updates = {}; 
             const logEntry = { date: serverTimestamp(), type: 'AUTO', note: `Order #${orderId.slice(-4)} (${order.status})`, user: 'System', details: [] };
             let deducted = false;
+            const skippedUnlinked = []; // packaging items skipped because they have no variety link
 
             Object.entries(inventoryData).forEach(([itemId, invItem]) => {
                 if (invItem.autoDeduct && invItem.deductRatio > 0) {
-                    let qtyToDeduct = 0;
-                    if (invItem.linkedVarieties && invItem.linkedVarieties.length > 0) {
-                        orderItems.forEach(ordItem => { 
-                            const orderItemName = (ordItem.name || "").trim().toLowerCase();
-                            const isMatch = invItem.linkedVarieties.some(linked => linked.trim().toLowerCase() === orderItemName);
-                            if (isMatch) qtyToDeduct += (parseInt(ordItem.qty) || 0);
-                        });
-                    } else { 
-                        qtyToDeduct = totalBoxes; 
+                    // FIXED: only deduct boxes for varieties actually linked to this packaging item.
+                    // No more "unlinked = whole order's total boxes" fallback — that caused the
+                    // same order to be counted multiple times across every unlinked packaging item
+                    // (e.g. 19 orders inflating to 1374 "boxes deducted").
+                    if (!invItem.linkedVarieties || invItem.linkedVarieties.length === 0) {
+                        skippedUnlinked.push(invItem.name);
+                        return; // skip — must be explicitly linked to specific microgreens to deduct
                     }
+                    let qtyToDeduct = 0;
+                    orderItems.forEach(ordItem => { 
+                        const orderItemName = (ordItem.name || "").trim().toLowerCase();
+                        const isMatch = invItem.linkedVarieties.some(linked => linked.trim().toLowerCase() === orderItemName);
+                        if (isMatch) qtyToDeduct += (parseInt(ordItem.qty) || 0);
+                    });
                     qtyToDeduct = qtyToDeduct * invItem.deductRatio;
                     if (qtyToDeduct > 0) {
                         updates[`store_inventory/${itemId}/qty`] = (invItem.qty || 0) - qtyToDeduct;
@@ -638,6 +751,10 @@
                     }
                 }
             });
+
+            if (skippedUnlinked.length > 0) {
+                console.warn('Skipped auto-deduct for unlinked packaging items (link them to specific microgreens in Inventory):', skippedUnlinked.join(', '));
+            }
 
             if (deducted) { 
                 updates[`orders/${orderId}/packagingDeducted`] = true; 
@@ -680,6 +797,13 @@
         window.saveNewItem = () => {
             const id = document.getElementById('editItemId').value; const name = document.getElementById('newItemName').value; const cat = document.getElementById('newItemCat').value; const qty = parseFloat(document.getElementById('newItemQty').value) || 0; const unit = document.getElementById('newItemUnit').value; const price = parseFloat(document.getElementById('newItemPrice').value) || 0; const threshold = parseFloat(document.getElementById('newItemThreshold').value) || 0; const autoDeduct = document.getElementById('newItemAutoDeduct').checked; const ratio = parseFloat(document.getElementById('newItemRatio').value) || 0; const linkedVarieties = Array.from(document.querySelectorAll('input[name="linkedVariety"]:checked')).map(cb => cb.value);
             if(!name || !cat) return showToast("Name required");
+            // Require at least one linked variety when auto-deduct is on — prevents the
+            // "unlinked global deduction" bug that double-counted boxes across multiple items.
+            if (autoDeduct && linkedVarieties.length === 0) {
+                const warn = document.getElementById('noLinkWarning');
+                if (warn) warn.classList.remove('hidden');
+                return showToast("Select at least one microgreen to link, or turn off Smart Sync");
+            }
             const data = { name, category: cat, qty, unit, avgCost: price, threshold, autoDeduct, deductRatio: ratio, linkedVarieties: linkedVarieties };
             if (id) update(ref(db, `store_inventory/${id}`), data).then(() => { closeModal('itemModal'); showToast("Item Updated"); }); else push(ref(db, 'store_inventory'), data).then(() => { closeModal('itemModal'); showToast("Item Created"); });
         };
