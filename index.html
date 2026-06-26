@@ -413,6 +413,20 @@
         </div>
     </div>
 
+    <!-- ORDER AUDIT MODAL: full per-order deduction breakdown — what was ordered,
+         what matched & deducted, what was skipped and why, double-link warnings -->
+    <div id="auditModal" class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm hidden flex items-end md:items-center justify-center p-0 md:p-4 no-print">
+        <div class="bg-white w-full md:max-w-lg rounded-t-3xl md:rounded-xl shadow-2xl max-h-[85vh] flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fas fa-magnifying-glass text-blue-600"></i> Order Audit</h3>
+                <button onclick="closeModal('auditModal')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 active:bg-slate-200"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto custom-scroll" id="auditModalBody">
+                <!-- filled by showOrderAudit() -->
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST -->
     <div id="toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl z-[100] transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-3 text-sm font-bold min-w-[200px] justify-center no-print">
         <i class="fas fa-check-circle text-green-400"></i> <span id="toastMsg">Success</span>
@@ -621,7 +635,7 @@
 
         function renderLogs(logs) {
             const tbody = document.getElementById('logsTableBody'); tbody.innerHTML = '';
-            Object.values(logs).sort((a,b) => b.date - a.date).slice(0, 50).forEach(log => {
+            Object.entries(logs).sort((a,b) => b[1].date - a[1].date).slice(0, 50).forEach(([logKey, log]) => {
                 const typeColor = log.type === 'IN' ? 'text-green-600 bg-green-50' : (log.type === 'OUT' ? 'text-red-600 bg-red-50' : 'text-blue-600 bg-blue-50');
                 let detailText = log.note; if(log.details) detailText += ` <span class="text-xs text-gray-400 block">(${log.details.map(d=>d.itemName).join(', ')})</span>`;
                 // FIX: AUTO logs store quantities inside details[] (one entry per packaging item deducted),
@@ -633,10 +647,52 @@
                 } else {
                     displayQty = parseFloat(log.qty || 0).toFixed(1);
                 }
-                tbody.innerHTML += `<tr class="border-b"><td class="p-4 text-xs text-slate-400">${new Date(log.date).toLocaleDateString()}</td><td class="p-4 font-bold text-slate-700">${log.item || 'Multiple'}</td><td class="p-4"><span class="px-2 py-1 rounded text-[10px] font-bold ${typeColor}">${log.type}</span></td><td class="p-4 text-right font-mono">${displayQty}</td><td class="p-4 text-sm">${detailText}</td></tr>`;
+                const isAuto = log.type === 'AUTO';
+                const flagIcon = log.flagged ? '<i class="fas fa-flag text-red-500 ml-1" title="Flagged: unusually large or double-linked deduction"></i>' : '';
+                const rowClick = isAuto ? `onclick="showOrderAudit('${logKey}')" class="border-b cursor-pointer hover:bg-blue-50"` : `class="border-b"`;
+                tbody.innerHTML += `<tr ${rowClick}><td class="p-4 text-xs text-slate-400">${new Date(log.date).toLocaleDateString()}</td><td class="p-4 font-bold text-slate-700">${log.item || 'Multiple'} ${flagIcon}</td><td class="p-4"><span class="px-2 py-1 rounded text-[10px] font-bold ${typeColor}">${log.type}</span></td><td class="p-4 text-right font-mono">${displayQty}</td><td class="p-4 text-sm">${detailText} ${isAuto ? '<i class="fas fa-chevron-right text-slate-300 ml-1"></i>' : ''}</td></tr>`;
             });
             renderDeductionsReport();
         }
+
+        // Shows the full story for one AUTO deduction log entry: what the order actually
+        // contained, which packaging items matched & how much got deducted, which ones
+        // were skipped and why, and any double-link warning — so any order is traceable.
+        window.showOrderAudit = (logKey) => {
+            const log = storeLogs[logKey];
+            if (!log) return;
+            const body = document.getElementById('auditModalBody');
+            const dateStr = new Date(log.date).toLocaleString('en-IN');
+
+            let html = `<div class="mb-4">
+                <p class="text-xs text-slate-400 font-bold uppercase">Order</p>
+                <p class="font-bold text-slate-800">${log.note || '-'}</p>
+                <p class="text-xs text-slate-400 mt-1">${dateStr} · Code version: <span class="font-mono">${log.codeVersion || 'unknown (older log)'}</span></p>
+                ${log.flagged ? '<p class="text-xs font-bold text-red-600 mt-2"><i class="fas fa-flag mr-1"></i>Flagged for review</p>' : ''}
+            </div>`;
+
+            if (Array.isArray(log.orderItems) && log.orderItems.length > 0) {
+                html += `<p class="text-xs font-bold text-slate-500 uppercase mb-1">Order Contained</p>
+                <div class="bg-slate-50 rounded-lg p-3 mb-4 text-sm">${log.orderItems.map(i => `<div class="flex justify-between py-0.5"><span>${i.name}</span><span class="font-mono font-bold">${i.qty}</span></div>`).join('')}</div>`;
+            } else {
+                html += `<p class="text-xs text-slate-400 italic mb-4">Order item breakdown not available (older log, before audit tracking was added).</p>`;
+            }
+
+            html += `<p class="text-xs font-bold text-emerald-600 uppercase mb-1">Deducted</p>`;
+            if (Array.isArray(log.details) && log.details.length > 0) {
+                html += `<div class="bg-emerald-50 border border-emerald-100 rounded-lg p-3 mb-4 text-sm">${log.details.map(d => `<div class="flex justify-between py-0.5"><span>${d.itemName}${d.matchedVarieties ? ` <span class="text-[10px] text-slate-400">(${d.matchedVarieties.join(', ')})</span>` : ''}</span><span class="font-mono font-bold text-emerald-700">-${parseFloat(d.deducted).toFixed(1)}</span></div>`).join('')}</div>`;
+            } else {
+                html += `<p class="text-xs text-slate-400 italic mb-4">Nothing was deducted for this order.</p>`;
+            }
+
+            if (Array.isArray(log.skipped) && log.skipped.length > 0) {
+                html += `<p class="text-xs font-bold text-amber-600 uppercase mb-1">Skipped / Warnings</p>
+                <div class="bg-amber-50 border border-amber-100 rounded-lg p-3 text-sm space-y-2">${log.skipped.map(s => `<div><span class="font-bold text-slate-700">${s.itemName}</span><p class="text-xs text-slate-500">${s.reason}</p></div>`).join('')}</div>`;
+            }
+
+            body.innerHTML = html;
+            document.getElementById('auditModal').classList.remove('hidden');
+        };
 
         // ── DAILY BOX DEDUCTIONS REPORT ─────────────────────────────────────
         // Shows, for a selected date (default = today), how many boxes/packaging
@@ -654,6 +710,7 @@
             const itemTotals = {};   // itemName -> { qty, orderCount }
             let totalBoxes = 0;
             let totalOrders = 0;
+            let flaggedOrders = 0;
             const seenOrderNotes = new Set();
 
             Object.values(storeLogs || {}).forEach(log => {
@@ -662,7 +719,7 @@
                 const logDateStr = logDate.getFullYear() + '-' + String(logDate.getMonth()+1).padStart(2,'0') + '-' + String(logDate.getDate()).padStart(2,'0');
                 if (logDateStr !== selectedDate) return;
 
-                if (!seenOrderNotes.has(log.note)) { seenOrderNotes.add(log.note); totalOrders++; }
+                if (!seenOrderNotes.has(log.note)) { seenOrderNotes.add(log.note); totalOrders++; if (log.flagged) flaggedOrders++; }
 
                 log.details.forEach(d => {
                     const qty = parseFloat(d.deducted) || 0;
@@ -680,7 +737,8 @@
             tiles.innerHTML =
                 '<div class="bg-blue-50 border border-blue-100 rounded-xl p-3"><p class="text-[10px] font-bold text-blue-400 uppercase">Date</p><h3 class="text-sm font-bold text-blue-700 mt-1">' + dateLabel + '</h3></div>' +
                 '<div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3"><p class="text-[10px] font-bold text-emerald-400 uppercase">Total Boxes Deducted</p><h3 class="text-2xl font-bold text-emerald-700 mt-1">' + totalBoxes.toFixed(1) + '</h3></div>' +
-                '<div class="bg-amber-50 border border-amber-100 rounded-xl p-3"><p class="text-[10px] font-bold text-amber-500 uppercase">Orders Synced</p><h3 class="text-2xl font-bold text-amber-700 mt-1">' + totalOrders + '</h3></div>';
+                '<div class="bg-amber-50 border border-amber-100 rounded-xl p-3"><p class="text-[10px] font-bold text-amber-500 uppercase">Orders Synced</p><h3 class="text-2xl font-bold text-amber-700 mt-1">' + totalOrders + '</h3></div>' +
+                (flaggedOrders > 0 ? '<div class="bg-red-50 border border-red-100 rounded-xl p-3"><p class="text-[10px] font-bold text-red-400 uppercase"><i class="fas fa-flag mr-1"></i>Flagged Orders</p><h3 class="text-2xl font-bold text-red-700 mt-1">' + flaggedOrders + '</h3></div>' : '');
 
             // Per-item table
             const body = document.getElementById('deductReportBody');
@@ -718,52 +776,94 @@
             });
         }
 
+        // Bumped whenever the deduction logic changes in a way that affects output —
+        // lets us tell, just by reading a log entry, exactly which code version produced it.
+        const DEDUCTION_LOGIC_VERSION = 'v3-full-audit-2026-06';
+
+        // Orders deducting more than this many boxes for a single packaging item get
+        // flagged in the log (red flag in Order Audit) so unusually large deductions
+        // are visible at a glance instead of buried in a big total.
+        const DEDUCTION_FLAG_THRESHOLD = 40;
+
         function processOrderDeduction(orderId, order) {
             let orderItems = Array.isArray(order.items) ? order.items : Object.values(order.items || {}); 
             if (orderItems.length === 0) return;
 
             const updates = {}; 
-            const logEntry = { date: serverTimestamp(), type: 'AUTO', note: `Order #${orderId.slice(-4)} (${order.status})`, user: 'System', details: [] };
+            const logEntry = {
+                date: serverTimestamp(),
+                type: 'AUTO',
+                note: `Order #${orderId.slice(-4)} (${order.status})`,
+                user: 'System',
+                codeVersion: DEDUCTION_LOGIC_VERSION,
+                orderId: orderId,
+                orderItems: orderItems.map(i => ({ name: i.name || '(no name)', qty: parseInt(i.qty) || 0 })),
+                details: [],   // packaging items that WERE deducted
+                skipped: [],   // packaging items that were NOT deducted, with the reason
+                flagged: false
+            };
             let deducted = false;
-            const skippedUnlinked = []; // packaging items skipped because they have no variety link
+
+            // Track which order item names already matched an autoDeduct packaging item,
+            // so we can warn if the SAME variety is linked to more than one item — the
+            // exact pattern that causes one order's boxes to be counted multiple times.
+            const varietyMatchedBy = {}; // orderItemName(lowercase) -> [packaging item names]
 
             Object.entries(inventoryData).forEach(([itemId, invItem]) => {
-                if (invItem.autoDeduct && invItem.deductRatio > 0) {
-                    // FIXED: only deduct boxes for varieties actually linked to this packaging item.
-                    // No more "unlinked = whole order's total boxes" fallback — that caused the
-                    // same order to be counted multiple times across every unlinked packaging item
-                    // (e.g. 19 orders inflating to 1374 "boxes deducted").
-                    if (!invItem.linkedVarieties || invItem.linkedVarieties.length === 0) {
-                        skippedUnlinked.push(invItem.name);
-                        return; // skip — must be explicitly linked to specific microgreens to deduct
+                if (!(invItem.autoDeduct && invItem.deductRatio > 0)) return;
+
+                // Must be explicitly linked to specific microgreens to deduct — an unlinked
+                // autoDeduct item is always skipped and recorded as such (never silently ignored).
+                if (!invItem.linkedVarieties || invItem.linkedVarieties.length === 0) {
+                    logEntry.skipped.push({ itemName: invItem.name, reason: 'Not linked to any microgreen variety — link it in Inventory to enable auto-deduct.' });
+                    return;
+                }
+
+                let qtyToDeduct = 0;
+                const matchedNames = [];
+                orderItems.forEach(ordItem => {
+                    const orderItemName = (ordItem.name || "").trim().toLowerCase();
+                    const isMatch = invItem.linkedVarieties.some(linked => linked.trim().toLowerCase() === orderItemName);
+                    if (isMatch) {
+                        qtyToDeduct += (parseInt(ordItem.qty) || 0);
+                        matchedNames.push(orderItemName);
+                        (varietyMatchedBy[orderItemName] = varietyMatchedBy[orderItemName] || []).push(invItem.name);
                     }
-                    let qtyToDeduct = 0;
-                    orderItems.forEach(ordItem => { 
-                        const orderItemName = (ordItem.name || "").trim().toLowerCase();
-                        const isMatch = invItem.linkedVarieties.some(linked => linked.trim().toLowerCase() === orderItemName);
-                        if (isMatch) qtyToDeduct += (parseInt(ordItem.qty) || 0);
-                    });
-                    qtyToDeduct = qtyToDeduct * invItem.deductRatio;
-                    if (qtyToDeduct > 0) {
-                        updates[`store_inventory/${itemId}/qty`] = (invItem.qty || 0) - qtyToDeduct;
-                        logEntry.details.push({ itemName: invItem.name, deducted: qtyToDeduct }); 
-                        deducted = true;
-                    }
+                });
+
+                if (qtyToDeduct <= 0) {
+                    logEntry.skipped.push({ itemName: invItem.name, reason: 'Linked to ' + invItem.linkedVarieties.length + ' variety/varieties, but none matched this order\'s item names.' });
+                    return;
+                }
+
+                qtyToDeduct = qtyToDeduct * invItem.deductRatio;
+                updates[`store_inventory/${itemId}/qty`] = (invItem.qty || 0) - qtyToDeduct;
+                if (qtyToDeduct > DEDUCTION_FLAG_THRESHOLD) logEntry.flagged = true;
+                logEntry.details.push({ itemName: invItem.name, deducted: qtyToDeduct, matchedVarieties: matchedNames });
+                deducted = true;
+            });
+
+            // A variety matched by 2+ packaging items means this order's quantity for that
+            // variety got deducted from multiple inventory items independently — flag it.
+            Object.entries(varietyMatchedBy).forEach(([variety, items]) => {
+                if (items.length > 1) {
+                    logEntry.flagged = true;
+                    logEntry.skipped.push({ itemName: '(double-link warning)', reason: `"${variety}" is linked to ${items.length} packaging items (${items.join(', ')}) — it was deducted from all of them for this order.` });
                 }
             });
 
-            if (skippedUnlinked.length > 0) {
-                console.warn('Skipped auto-deduct for unlinked packaging items (link them to specific microgreens in Inventory):', skippedUnlinked.join(', '));
+            if (logEntry.skipped.length > 0) {
+                console.warn('Order #' + orderId.slice(-4) + ' — items skipped during auto-deduct:', logEntry.skipped);
             }
 
-            if (deducted) { 
-                updates[`orders/${orderId}/packagingDeducted`] = true; 
-                const newLogKey = push(ref(db, 'store_logs')).key; 
-                updates[`store_logs/${newLogKey}`] = logEntry; 
-                update(ref(db), updates).then(() => showToast(`Synced: Stock deducted for Order #${orderId.slice(-4)}`)); 
-            } else { 
-                update(ref(db, `orders/${orderId}`), { packagingDeducted: true }); 
-            }
+            // ALWAYS write a log entry, even if nothing was deducted — this is what makes
+            // every order traceable later (what was ordered, what matched, what didn't, why).
+            updates[`orders/${orderId}/packagingDeducted`] = true;
+            const newLogKey = push(ref(db, 'store_logs')).key;
+            updates[`store_logs/${newLogKey}`] = logEntry;
+            update(ref(db), updates).then(() => {
+                if (deducted) showToast(`Synced: Stock deducted for Order #${orderId.slice(-4)}`);
+            });
         }
 
         window.submitTransaction = (type) => {
@@ -803,6 +903,23 @@
                 const warn = document.getElementById('noLinkWarning');
                 if (warn) warn.classList.remove('hidden');
                 return showToast("Select at least one microgreen to link, or turn off Smart Sync");
+            }
+            // Block linking a variety that's already linked to a DIFFERENT auto-deduct item —
+            // this is what causes one order's quantity to be deducted twice (once per item).
+            if (autoDeduct && linkedVarieties.length > 0) {
+                const conflicts = [];
+                Object.entries(inventoryData).forEach(([otherId, otherItem]) => {
+                    if (otherId === id) return; // editing this same item is fine
+                    if (!otherItem.autoDeduct || !Array.isArray(otherItem.linkedVarieties)) return;
+                    linkedVarieties.forEach(v => {
+                        if (otherItem.linkedVarieties.some(ov => ov.trim().toLowerCase() === v.trim().toLowerCase())) {
+                            conflicts.push(`"${v}" is already linked to "${otherItem.name}"`);
+                        }
+                    });
+                });
+                if (conflicts.length > 0) {
+                    return showToast("Can't save: " + conflicts[0] + ". Each variety can only be linked to one packaging item.");
+                }
             }
             const data = { name, category: cat, qty, unit, avgCost: price, threshold, autoDeduct, deductRatio: ratio, linkedVarieties: linkedVarieties };
             if (id) update(ref(db, `store_inventory/${id}`), data).then(() => { closeModal('itemModal'); showToast("Item Updated"); }); else push(ref(db, 'store_inventory'), data).then(() => { closeModal('itemModal'); showToast("Item Created"); });
