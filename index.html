@@ -110,6 +110,7 @@
             <button onclick="switchTab('inward')" id="nav-d-inward" class="nav-item text-slate-500 hover:bg-slate-50 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-arrow-down w-5 text-green-600"></i> Stock In</button>
             <button onclick="switchTab('outward')" id="nav-d-outward" class="nav-item text-slate-500 hover:bg-slate-50 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-arrow-up w-5 text-red-600"></i> Stock Out</button>
             <button onclick="switchTab('logs')" id="nav-d-logs" class="nav-item text-slate-500 hover:bg-slate-50 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-history w-5"></i> Logs</button>
+            <button onclick="switchTab('audit')" id="nav-d-audit" class="nav-item text-slate-500 hover:bg-slate-50 text-left px-4 py-3 rounded-xl font-medium text-sm transition flex items-center gap-3"><i class="fas fa-receipt w-5 text-rose-600"></i> Order Deductions</button>
             <div class="mt-auto">
                 <button onclick="logout()" class="w-full border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-500 py-2 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2"><i class="fas fa-power-off"></i> Logout</button>
             </div>
@@ -349,6 +350,22 @@
                     </div>
                 </div>
 
+                <!-- TAB 7: ORDER DEDUCTIONS — every order for a chosen date, with full
+                     box-deduction breakdown visible inline (no clicking into each one) -->
+                <div id="tab-audit" class="hidden-panel fade-in max-w-6xl mx-auto">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4 no-print">
+                        <h2 class="text-lg font-bold text-slate-800">Order Deductions</h2>
+                        <div class="flex items-center gap-2">
+                            <input type="date" id="auditTabDate" class="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-slate-800" onchange="renderOrderAuditTab()">
+                            <input type="text" id="auditTabSearch" placeholder="Search order / item..." class="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-slate-800" oninput="renderOrderAuditTab()">
+                            <button onclick="scanDuplicateLogs()" class="bg-red-50 text-red-600 border border-red-100 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-100 transition"><i class="fas fa-clone mr-1"></i> Find Duplicate Deductions</button>
+                            <button onclick="window.print()" class="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-200 transition"><i class="fas fa-print mr-1"></i> Print</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3 mb-4" id="auditTabTiles"></div>
+                    <div class="space-y-3" id="auditTabList"></div>
+                </div>
+
             </main>
         </div>
 
@@ -364,6 +381,7 @@
 
             <button onclick="switchTab('analytics')" id="nav-m-analytics" class="flex flex-col items-center p-2 w-16 text-slate-400"><i class="fas fa-chart-bar text-xl mb-1"></i><span class="text-[10px] font-bold">Stats</span></button>
             <button onclick="switchTab('logs')" id="nav-m-logs" class="flex flex-col items-center p-2 w-16 text-slate-400"><i class="fas fa-history text-xl mb-1"></i><span class="text-[10px] font-bold">Logs</span></button>
+            <button onclick="switchTab('audit')" id="nav-m-audit" class="flex flex-col items-center p-2 w-16 text-slate-400"><i class="fas fa-receipt text-xl mb-1"></i><span class="text-[10px] font-bold">Audit</span></button>
         </nav>
 
     </div>
@@ -427,6 +445,23 @@
         </div>
     </div>
 
+    <!-- DUPLICATE DEDUCTIONS REVIEW MODAL: shows exactly what will be deleted and what
+         stock will be restored, before anything is actually changed -->
+    <div id="dupModal" class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm hidden flex items-end md:items-center justify-center p-0 md:p-4 no-print">
+        <div class="bg-white w-full md:max-w-lg rounded-t-3xl md:rounded-xl shadow-2xl max-h-[85vh] flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fas fa-clone text-red-600"></i> Duplicate Deductions</h3>
+                <button onclick="closeModal('dupModal')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 active:bg-slate-200"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto custom-scroll" id="dupModalBody">
+                <!-- filled by scanDuplicateLogs() -->
+            </div>
+            <div class="p-4 border-t border-slate-100 shrink-0 hidden" id="dupModalFooter">
+                <button onclick="confirmRemoveDuplicates()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition"><i class="fas fa-trash mr-2"></i>Remove Duplicates & Restore Stock</button>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST -->
     <div id="toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl z-[100] transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-3 text-sm font-bold min-w-[200px] justify-center no-print">
         <i class="fas fa-check-circle text-green-400"></i> <span id="toastMsg">Success</span>
@@ -435,7 +470,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getDatabase, ref, set, onValue, push, update, remove, serverTimestamp, query, orderByChild, equalTo, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, set, onValue, push, update, remove, serverTimestamp, query, orderByChild, equalTo, limitToLast, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
         const firebaseConfig = { apiKey: "AIzaSyCtR2jdbu-SZ-7obmg88fPksJnNxk9BnqQ", authDomain: "oligo-store.firebaseapp.com", projectId: "oligo-store", storageBucket: "oligo-store.firebasestorage.app", messagingSenderId: "891788554016", appId: "1:891788554016:web:206c7da0a562fb7b1bf145" };
         const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getDatabase(app);
@@ -453,7 +488,13 @@
         window.logout = () => signOut(auth);
         onAuthStateChanged(auth, user => { if (user) { currentUser = user; document.getElementById('authView').classList.add('hidden'); document.getElementById('mainView').classList.remove('hidden'); document.getElementById('printDate').innerText += new Date().toLocaleString(); initStore(); } else { document.getElementById('authView').classList.remove('hidden'); document.getElementById('mainView').classList.add('hidden'); } });
 
+        let storeInitialized = false; // guards against onAuthStateChanged firing more than once
+                                       // (token refresh, reconnect, etc.) and stacking duplicate
+                                       // listeners on 'orders' — which was causing every order to
+                                       // get deducted and logged twice.
         function initStore() {
+            if (storeInitialized) return;
+            storeInitialized = true;
             onValue(ref(db, 'store_inventory'), snap => { inventoryData = snap.val() || {}; renderDashboard(); renderInventory(); populateDropdowns(); renderAnalytics(); });
             onValue(ref(db, 'store_logs'), snap => { storeLogs = snap.val() || {}; renderLogs(storeLogs); renderAnalytics(); });
             onValue(ref(db, 'menus'), snap => {
@@ -508,7 +549,7 @@
 
             Object.values(storeLogs).forEach(log => {
                 if(log.type === 'OUT' || log.type === 'AUTO') {
-                    const logDate = new Date(log.date);
+                    const logDate = new Date(getLogBusinessDate(log));
                     const diffTime = Math.abs(today - logDate);
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
                     if(diffDays <= 7) {
@@ -541,7 +582,7 @@
             const itemUsage = {};
             
             Object.values(storeLogs).forEach(log => {
-                const logDate = new Date(log.date);
+                const logDate = new Date(getLogBusinessDate(log));
                 if((log.type === 'OUT' || log.type === 'AUTO') && logDate >= cutoffDate) {
                     if(log.type === 'AUTO' && log.details) {
                         log.details.forEach(d => itemUsage[d.itemName] = (itemUsage[d.itemName] || 0) + parseFloat(d.deducted));
@@ -653,6 +694,7 @@
                 tbody.innerHTML += `<tr ${rowClick}><td class="p-4 text-xs text-slate-400">${new Date(log.date).toLocaleDateString()}</td><td class="p-4 font-bold text-slate-700">${log.item || 'Multiple'} ${flagIcon}</td><td class="p-4"><span class="px-2 py-1 rounded text-[10px] font-bold ${typeColor}">${log.type}</span></td><td class="p-4 text-right font-mono">${displayQty}</td><td class="p-4 text-sm">${detailText} ${isAuto ? '<i class="fas fa-chevron-right text-slate-300 ml-1"></i>' : ''}</td></tr>`;
             });
             renderDeductionsReport();
+            renderOrderAuditTab();
         }
 
         // Shows the full story for one AUTO deduction log entry: what the order actually
@@ -662,12 +704,14 @@
             const log = storeLogs[logKey];
             if (!log) return;
             const body = document.getElementById('auditModalBody');
-            const dateStr = new Date(log.date).toLocaleString('en-IN');
+            const orderDateStr = new Date(getLogBusinessDate(log)).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+            const processedStr = new Date(log.date).toLocaleString('en-IN');
 
             let html = `<div class="mb-4">
                 <p class="text-xs text-slate-400 font-bold uppercase">Order</p>
                 <p class="font-bold text-slate-800">${log.note || '-'}</p>
-                <p class="text-xs text-slate-400 mt-1">${dateStr} · Code version: <span class="font-mono">${log.codeVersion || 'unknown (older log)'}</span></p>
+                <p class="text-xs text-slate-500 mt-1">Order date: <span class="font-bold">${orderDateStr}</span>${log.orderDateFallback ? ' <span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">date guessed — order had no date field</span>' : ''}</p>
+                <p class="text-xs text-slate-400 mt-1">Processed: ${processedStr} · Code version: <span class="font-mono">${log.codeVersion || 'unknown (older log)'}</span></p>
                 ${log.flagged ? '<p class="text-xs font-bold text-red-600 mt-2"><i class="fas fa-flag mr-1"></i>Flagged for review</p>' : ''}
             </div>`;
 
@@ -715,7 +759,7 @@
 
             Object.values(storeLogs || {}).forEach(log => {
                 if (log.type !== 'AUTO' || !Array.isArray(log.details)) return;
-                const logDate = new Date(log.date);
+                const logDate = new Date(getLogBusinessDate(log));
                 const logDateStr = logDate.getFullYear() + '-' + String(logDate.getMonth()+1).padStart(2,'0') + '-' + String(logDate.getDate()).padStart(2,'0');
                 if (logDateStr !== selectedDate) return;
 
@@ -760,7 +804,163 @@
             }).join('');
         };
 
-        // --- PRODUCTION SYNC & TRANSACTIONS (FIXED & ROBUST) ---
+        // ── ORDER DEDUCTIONS TAB ─────────────────────────────────────────────
+        // One row per order for the chosen date, with the full breakdown already
+        // visible inline (ordered items, what got deducted from where, what was
+        // skipped and why, flag if anything looks off) — no clicking required.
+        window.renderOrderAuditTab = function() {
+            const dateInput = document.getElementById('auditTabDate');
+            if (!dateInput) return; // tab not in DOM yet on first paint, fine
+            if (!dateInput.value) {
+                const today = new Date();
+                dateInput.value = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+            }
+            const selectedDate = dateInput.value;
+            const searchEl = document.getElementById('auditTabSearch');
+            const searchTerm = (searchEl && searchEl.value || '').trim().toLowerCase();
+
+            const rows = Object.entries(storeLogs || {}).filter(([key, log]) => {
+                if (log.type !== 'AUTO') return false;
+                const d = new Date(getLogBusinessDate(log));
+                const dStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+                if (dStr !== selectedDate) return false;
+                if (searchTerm) {
+                    const haystack = [
+                        log.note || '',
+                        ...(log.orderItems || []).map(i => i.name),
+                        ...(log.details || []).map(d => d.itemName),
+                        ...(log.skipped || []).map(s => s.itemName)
+                    ].join(' ').toLowerCase();
+                    if (!haystack.includes(searchTerm)) return false;
+                }
+                return true;
+            }).sort((a,b) => getLogBusinessDate(b[1]) - getLogBusinessDate(a[1]));
+
+            const flaggedCount = rows.filter(([,log]) => log.flagged).length;
+            const totalDeducted = rows.reduce((sum, [,log]) => sum + (log.details||[]).reduce((s,d)=>s+(parseFloat(d.deducted)||0),0), 0);
+
+            document.getElementById('auditTabTiles').innerHTML =
+                '<div class="bg-slate-50 border border-slate-200 rounded-xl p-3"><p class="text-[10px] font-bold text-slate-400 uppercase">Orders Shown</p><h3 class="text-2xl font-bold text-slate-700 mt-1">' + rows.length + '</h3></div>' +
+                '<div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3"><p class="text-[10px] font-bold text-emerald-400 uppercase">Total Boxes Deducted</p><h3 class="text-2xl font-bold text-emerald-700 mt-1">' + totalDeducted.toFixed(1) + '</h3></div>' +
+                '<div class="' + (flaggedCount > 0 ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-200') + ' border rounded-xl p-3"><p class="text-[10px] font-bold ' + (flaggedCount > 0 ? 'text-red-400' : 'text-slate-400') + ' uppercase">Flagged</p><h3 class="text-2xl font-bold mt-1 ' + (flaggedCount > 0 ? 'text-red-700' : 'text-slate-700') + '">' + flaggedCount + '</h3></div>';
+
+            const list = document.getElementById('auditTabList');
+            if (rows.length === 0) { list.innerHTML = '<p class="text-center text-slate-400 text-sm py-10">No auto-deductions found for this date.</p>'; return; }
+
+            list.innerHTML = rows.map(([key, log]) => {
+                // "Processed" = when the app actually ran this deduction (could be days after
+                // the order date, if the app was closed for a while) — shown for transparency,
+                // separate from the order's real date which is what the report groups by.
+                const processedStr = new Date(log.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                const dateFallbackHtml = log.orderDateFallback
+                    ? '<span class="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold ml-1" title="Order had no date field — today\'s date was used">date guessed</span>'
+                    : '';
+                const orderedHtml = (log.orderItems && log.orderItems.length > 0)
+                    ? log.orderItems.map(i => `<span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-1 rounded-full mr-1 mb-1 inline-block">${i.name} ×${i.qty}</span>`).join('')
+                    : '<span class="text-[11px] text-slate-400 italic">Order item details not available (older log)</span>';
+                const deductedHtml = (log.details && log.details.length > 0)
+                    ? log.details.map(d => `<span class="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full mr-1 mb-1 inline-block font-bold">${d.itemName} -${parseFloat(d.deducted).toFixed(1)}</span>`).join('')
+                    : '<span class="text-[11px] text-slate-400 italic">Nothing deducted</span>';
+                const skippedHtml = (log.skipped && log.skipped.length > 0)
+                    ? '<div class="mt-2 bg-amber-50 border border-amber-100 rounded-lg p-2">' + log.skipped.map(s => `<p class="text-[11px] text-amber-700"><span class="font-bold">${s.itemName}:</span> ${s.reason}</p>`).join('') + '</div>'
+                    : '';
+                return `<div class="bg-white rounded-xl border ${log.flagged ? 'border-red-200' : 'border-slate-200'} p-4 shadow-sm">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <p class="font-bold text-slate-800 text-sm">${log.note || '-'} ${log.flagged ? '<i class="fas fa-flag text-red-500 ml-1" title="Flagged"></i>' : ''}${dateFallbackHtml}</p>
+                            <p class="text-[11px] text-slate-400">Processed: ${processedStr} · v: ${log.codeVersion || 'older log'}</p>
+                        </div>
+                    </div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Ordered</p>
+                    <div class="mb-2">${orderedHtml}</div>
+                    <p class="text-[10px] font-bold text-emerald-500 uppercase mb-1">Deducted</p>
+                    <div>${deductedHtml}</div>
+                    ${skippedHtml}
+                </div>`;
+            }).join('');
+        };
+
+        // ── REMOVE DUPLICATE LOGS ────────────────────────────────────────────
+        // Finds AUTO logs that share the same orderId (created when multiple tabs/
+        // sessions raced before the transaction-claim fix). Keeps the EARLIEST log
+        // for each order, marks the rest as duplicates to delete, and calculates how
+        // much stock needs to be added back per packaging item to undo the extra
+        // deduction(s). Nothing is changed until the person confirms in the modal.
+        let pendingDuplicateRemoval = null; // { logKeysToDelete: [], restoreMap: {itemName: qty}, groups: [...] }
+
+        window.scanDuplicateLogs = function() {
+            const byOrder = {}; // orderId -> [ [logKey, log], ... ]
+            Object.entries(storeLogs || {}).forEach(([logKey, log]) => {
+                if (log.type !== 'AUTO' || !log.orderId) return;
+                (byOrder[log.orderId] = byOrder[log.orderId] || []).push([logKey, log]);
+            });
+
+            const groups = [];
+            const logKeysToDelete = [];
+            const restoreMap = {};
+
+            Object.entries(byOrder).forEach(([orderId, entries]) => {
+                if (entries.length < 2) return; // not a duplicate
+                entries.sort((a,b) => a[1].date - b[1].date);
+                const [keepKey, keepLog] = entries[0];
+                const duplicates = entries.slice(1);
+                duplicates.forEach(([dupKey, dupLog]) => {
+                    logKeysToDelete.push(dupKey);
+                    (dupLog.details || []).forEach(d => {
+                        restoreMap[d.itemName] = (restoreMap[d.itemName] || 0) + (parseFloat(d.deducted) || 0);
+                    });
+                });
+                groups.push({ orderId, note: keepLog.note, keepKey, duplicateCount: duplicates.length, restored: duplicates.flatMap(([,l]) => l.details || []) });
+            });
+
+            pendingDuplicateRemoval = { logKeysToDelete, restoreMap, groups };
+
+            const body = document.getElementById('dupModalBody');
+            const footer = document.getElementById('dupModalFooter');
+            if (groups.length === 0) {
+                body.innerHTML = '<p class="text-center text-slate-400 text-sm py-10"><i class="fas fa-circle-check text-emerald-400 text-2xl block mb-2"></i>No duplicate deductions found.</p>';
+                footer.classList.add('hidden');
+            } else {
+                let html = `<p class="text-sm text-slate-600 mb-4">Found <span class="font-bold text-red-600">${groups.length} order(s)</span> with duplicate deductions (${logKeysToDelete.length} extra log entries total). The earliest log for each order will be kept; the rest will be deleted and this stock will be added back:</p>`;
+                html += '<div class="space-y-3 mb-4">' + groups.map(g => `
+                    <div class="bg-red-50 border border-red-100 rounded-lg p-3">
+                        <p class="font-bold text-slate-700 text-sm">${g.note} <span class="text-xs text-red-500 font-normal">(${g.duplicateCount} duplicate${g.duplicateCount>1?'s':''})</span></p>
+                        <div class="mt-1">${g.restored.map(d => `<span class="text-[11px] bg-white border border-red-200 text-red-600 px-2 py-0.5 rounded-full mr-1 inline-block">${d.itemName} +${parseFloat(d.deducted).toFixed(1)}</span>`).join('')}</div>
+                    </div>`).join('') + '</div>';
+                html += '<p class="text-xs font-bold text-slate-500 uppercase mb-1">Total Stock To Be Restored</p>';
+                html += '<div class="bg-emerald-50 border border-emerald-100 rounded-lg p-3">' + Object.entries(restoreMap).map(([name, qty]) => `<div class="flex justify-between text-sm py-0.5"><span>${name}</span><span class="font-mono font-bold text-emerald-700">+${qty.toFixed(1)}</span></div>`).join('') + '</div>';
+                body.innerHTML = html;
+                footer.classList.remove('hidden');
+            }
+            document.getElementById('dupModal').classList.remove('hidden');
+        };
+
+        window.confirmRemoveDuplicates = function() {
+            if (!pendingDuplicateRemoval || pendingDuplicateRemoval.logKeysToDelete.length === 0) return;
+            const { logKeysToDelete, restoreMap } = pendingDuplicateRemoval;
+            const updates = {};
+
+            // Delete each duplicate log entry
+            logKeysToDelete.forEach(key => { updates[`store_logs/${key}`] = null; });
+
+            // Add the wrongly-deducted stock back, matched by inventory item name
+            Object.entries(restoreMap).forEach(([itemName, qtyToRestore]) => {
+                const match = Object.entries(inventoryData || {}).find(([id, item]) => item.name === itemName);
+                if (match) {
+                    const [itemId, item] = match;
+                    updates[`store_inventory/${itemId}/qty`] = (parseFloat(item.qty) || 0) + qtyToRestore;
+                } else {
+                    console.warn('Could not find inventory item to restore stock for:', itemName);
+                }
+            });
+
+            update(ref(db), updates).then(() => {
+                showToast(`Removed ${logKeysToDelete.length} duplicate log(s) and restored stock`);
+                closeModal('dupModal');
+                pendingDuplicateRemoval = null;
+            }).catch(err => showToast('Error: ' + err.message));
+        };
+
         function initProductionSync() {
             const ordersRef = query(ref(db, 'orders'), limitToLast(300));
             onValue(ordersRef, (snapshot) => {
@@ -778,7 +978,46 @@
 
         // Bumped whenever the deduction logic changes in a way that affects output —
         // lets us tell, just by reading a log entry, exactly which code version produced it.
-        const DEDUCTION_LOGIC_VERSION = 'v3-full-audit-2026-06';
+        const DEDUCTION_LOGIC_VERSION = 'v4-real-order-date-2026-07';
+
+        // FIX (date-wise deduction bug): if the app stays closed for a few days, all the
+        // orders that piled up get processed together the next time it opens — and every
+        // one of them used to get logged with THAT processing moment as its "date". So a
+        // week's worth of deductions all showed up under one day in the reports/graphs.
+        //
+        // This resolves the order's REAL business date (when it was actually requested/
+        // placed) so every deduction log is stamped with the day the boxes were actually
+        // used — not the day the app happened to be open. Priority: requestedDate (what
+        // Production/Command Center use as the delivery date) then createdAt (when the
+        // order was placed), then a few other common field names, just in case.
+        function getOrderBusinessDate(order) {
+            const candidates = [order.requestedDate, order.createdAt, order.orderDate, order.deliveryDate, order.date, order.timestamp];
+            for (const c of candidates) {
+                if (c === undefined || c === null || c === '') continue;
+                let ts = null;
+                if (typeof c === 'number') {
+                    ts = c;
+                } else if (typeof c === 'string') {
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(c)) {
+                        ts = new Date(c + 'T00:00:00').getTime(); // plain date string -> local midnight, not UTC
+                    } else {
+                        const parsed = new Date(c);
+                        if (!isNaN(parsed.getTime())) ts = parsed.getTime();
+                    }
+                }
+                if (ts !== null && !isNaN(ts)) return ts;
+            }
+            return null; // couldn't find a real date on the order — caller must fall back
+        }
+
+        // Every report/graph that groups deductions "by day" should read the date through
+        // this helper, not log.date directly. AUTO logs use the real order date (orderDate)
+        // when we have it; anything else (manual IN/OUT, or older logs from before this fix
+        // that never captured orderDate) falls back to the processing timestamp.
+        function getLogBusinessDate(log) {
+            if (log.type === 'AUTO' && log.orderDate) return log.orderDate;
+            return log.date;
+        }
 
         // Orders deducting more than this many boxes for a single packaging item get
         // flagged in the log (red flag in Order Audit) so unusually large deductions
@@ -789,11 +1028,37 @@
             let orderItems = Array.isArray(order.items) ? order.items : Object.values(order.items || {}); 
             if (orderItems.length === 0) return;
 
+            // ATOMIC CLAIM: runTransaction on packagingDeducted means only ONE caller can ever
+            // win this — even if multiple browser tabs/sessions are open at once and both see
+            // packagingDeducted === false at the same instant. The loser's transaction commits
+            // with committed=false (or the value already true) and does nothing further. This
+            // is what actually stops the same order being deducted/logged twice — a single-tab
+            // guard alone can't prevent a race between two separate open tabs.
+            runTransaction(ref(db, `orders/${orderId}/packagingDeducted`), (current) => {
+                if (current === true) return; // already claimed by someone else — abort, no write
+                return true;
+            }).then((result) => {
+                if (!result.committed) return; // we lost the race — another tab/session is handling this order
+                if (result.snapshot.val() !== true) return; // safety check
+                runOrderDeductionLogic(orderId, orderItems, order.status, order);
+            });
+        }
+
+        function runOrderDeductionLogic(orderId, orderItems, orderStatus, order) {
             const updates = {}; 
+
+            // Real date the boxes belong to (order's own requestedDate/createdAt) — this is
+            // what reports & graphs group by. Falls back to "now" only if the order truly
+            // has no date field on it, and gets flagged so it's visible in the audit trail.
+            const resolvedOrderDate = getOrderBusinessDate(order || {});
+            const usedFallbackDate = resolvedOrderDate === null;
+
             const logEntry = {
-                date: serverTimestamp(),
+                date: serverTimestamp(),      // when this deduction was actually PROCESSED (audit/debug only)
+                orderDate: resolvedOrderDate !== null ? resolvedOrderDate : Date.now(), // the REAL date to report/graph by
+                orderDateFallback: usedFallbackDate, // true = order had no usable date field, had to guess "now"
                 type: 'AUTO',
-                note: `Order #${orderId.slice(-4)} (${order.status})`,
+                note: `Order #${orderId.slice(-4)} (${orderStatus})`,
                 user: 'System',
                 codeVersion: DEDUCTION_LOGIC_VERSION,
                 orderId: orderId,
@@ -802,6 +1067,10 @@
                 skipped: [],   // packaging items that were NOT deducted, with the reason
                 flagged: false
             };
+            if (usedFallbackDate) {
+                logEntry.flagged = true;
+                logEntry.skipped.push({ itemName: '(date-fallback warning)', reason: 'This order had no requestedDate/createdAt field, so today\'s date was used for reporting. Check the order in the Production app.' });
+            }
             let deducted = false;
 
             // Track which order item names already matched an autoDeduct packaging item,
@@ -858,7 +1127,7 @@
 
             // ALWAYS write a log entry, even if nothing was deducted — this is what makes
             // every order traceable later (what was ordered, what matched, what didn't, why).
-            updates[`orders/${orderId}/packagingDeducted`] = true;
+            // (packagingDeducted was already set atomically by the claim transaction above.)
             const newLogKey = push(ref(db, 'store_logs')).key;
             updates[`store_logs/${newLogKey}`] = logEntry;
             update(ref(db), updates).then(() => {
