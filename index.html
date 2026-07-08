@@ -978,20 +978,28 @@
 
         // Bumped whenever the deduction logic changes in a way that affects output —
         // lets us tell, just by reading a log entry, exactly which code version produced it.
-        const DEDUCTION_LOGIC_VERSION = 'v4-real-order-date-2026-07';
+        const DEDUCTION_LOGIC_VERSION = 'v5-delivered-date-match-2026-07';
 
         // FIX (date-wise deduction bug): if the app stays closed for a few days, all the
         // orders that piled up get processed together the next time it opens — and every
         // one of them used to get logged with THAT processing moment as its "date". So a
         // week's worth of deductions all showed up under one day in the reports/graphs.
         //
-        // This resolves the order's REAL business date (when it was actually requested/
-        // placed) so every deduction log is stamped with the day the boxes were actually
-        // used — not the day the app happened to be open. Priority: requestedDate (what
-        // Production/Command Center use as the delivery date) then createdAt (when the
-        // order was placed), then a few other common field names, just in case.
+        // This resolves the order's REAL business date so every deduction log is stamped
+        // with the day the boxes were actually used — not the day the app happened to be
+        // open. IMPORTANT: this must match the Production app's Day Report exactly, or the
+        // two reports disagree about which day an order counts toward — e.g. an order
+        // requested for one day but actually delivered a day later would land in Day
+        // Report's numbers for the delivery day, but in Store's deduction log for the
+        // requested day, making the day's totals look mismatched even though nothing was
+        // actually lost. So the priority here mirrors Day Report's own logic exactly:
+        // statusUpdatedAt (the real delivery moment) for DELIVERED orders first, then
+        // requestedDate (the planned delivery date, used for orders still in progress),
+        // then createdAt and other fallbacks.
         function getOrderBusinessDate(order) {
-            const candidates = [order.requestedDate, order.createdAt, order.orderDate, order.deliveryDate, order.date, order.timestamp];
+            const candidates = (order && order.status === 'DELIVERED' && order.statusUpdatedAt)
+                ? [order.statusUpdatedAt, order.requestedDate, order.createdAt, order.orderDate, order.deliveryDate, order.date, order.timestamp]
+                : [order.requestedDate, order.createdAt, order.orderDate, order.deliveryDate, order.date, order.timestamp];
             for (const c of candidates) {
                 if (c === undefined || c === null || c === '') continue;
                 let ts = null;
