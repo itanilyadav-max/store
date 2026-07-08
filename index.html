@@ -978,7 +978,7 @@
 
         // Bumped whenever the deduction logic changes in a way that affects output —
         // lets us tell, just by reading a log entry, exactly which code version produced it.
-        const DEDUCTION_LOGIC_VERSION = 'v5-delivered-date-match-2026-07';
+        const DEDUCTION_LOGIC_VERSION = 'v6-unmatched-item-warning-2026-07';
 
         // FIX (date-wise deduction bug): if the app stays closed for a few days, all the
         // orders that piled up get processed together the next time it opens — and every
@@ -1126,6 +1126,23 @@
                 if (items.length > 1) {
                     logEntry.flagged = true;
                     logEntry.skipped.push({ itemName: '(double-link warning)', reason: `"${variety}" is linked to ${items.length} packaging items (${items.join(', ')}) — it was deducted from all of them for this order.` });
+                }
+            });
+
+            // REVERSE CHECK: the loop above only ever speaks from the packaging item's side
+            // ("this container is linked to X, none matched") — it never says anything about
+            // an order item that matched NOTHING at all, e.g. a variety like Pea Shoot that
+            // isn't linked to any packaging item yet. That variety's boxes silently deduct
+            // zero, with no explicit record naming it — the exact case that took a manual
+            // Inventory screenshot to diagnose before. This closes that gap: after all
+            // packaging items have had their turn to match, walk the order's own items and
+            // flag any whose name never appeared in varietyMatchedBy at all.
+            orderItems.forEach(ordItem => {
+                const orderItemName = (ordItem.name || '').trim().toLowerCase();
+                if (!orderItemName) return;
+                if (!varietyMatchedBy[orderItemName]) {
+                    logEntry.flagged = true;
+                    logEntry.skipped.push({ itemName: ordItem.name || '(unnamed item)', reason: `Ordered ${parseInt(ordItem.qty) || 0}x, but this item didn't match any packaging item's linked varieties — check Inventory to link it, or check for a name mismatch.` });
                 }
             });
 
